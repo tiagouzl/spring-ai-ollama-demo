@@ -1,0 +1,21 @@
+# Compiled artifacts
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Local config / secrets (never commit real keys)
+.env
+application-local.yml
