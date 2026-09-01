@@ -12,9 +12,9 @@
     </parent>
 
     <groupId>com.example</groupId>
-    <artifactId>spring-ai-alibaba-demo</artifactId>
+    <artifactId>spring-ai-ollama-demo</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>spring-ai-alibaba-demo</name>
+    <name>spring-ai-ollama-demo</name>
     <description>Demo Spring AI com modelo local Ollama (granite4.1:3b)</description>
 
     <properties>
