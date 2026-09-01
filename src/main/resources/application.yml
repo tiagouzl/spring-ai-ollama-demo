@@ -16,12 +16,6 @@ spring:
       embedding:
         options:
           model: nomic-embed-text
-    vectorstore:
-      simple:
-        initialize-schema: true
-    advisors:
-      vector-store:
-        enabled: false
     # Alibaba DashScope (Qwen) - cloud model, optional. Set DASHSCOPE_API_KEY env var to enable.
     # Use 'dummy' as fallback so Spring does not fail at startup when no key is set;
     # the /ai/alibaba/* endpoints and DashScopeEnabledCondition will detect dummy

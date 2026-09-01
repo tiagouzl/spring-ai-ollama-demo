@@ -200,17 +200,20 @@ src/main/
 ├── java/com/example/ai/
 │   ├── DemoApplication.java        # Spring Boot entry point
 │   ├── ChatController.java         # REST endpoints (chat, stream, memory, tools, rag)
+│   ├── config/
+│   │   └── PrimaryChatClientConfig.java  # @Primary ChatClient.Builder for Ollama (fixes 2-model conflict)
 │   ├── tools/
 │   │   ├── DateTimeTools.java      # @Tool — current date/time
 │   │   └── MathTools.java          # @Tool — arithmetic
 │   ├── rag/
 │   │   ├── RagConfig.java          # SimpleVectorStore (ollamaEmbeddingModel) + ingestion
-│   │   └── RagService.java         # Manual RAG (topK=2) + debug search
+│   │   └── RagService.java         # Manual RAG (topK=2) — throws on error (no HTTP 200 swallow)
 │   └── alibaba/
-│       ├── DashScopeManualConfig.java   # Creates DashScopeChatModel when DASHSCOPE_API_KEY set
-│       └── AlibabaChatController.java   # /ai/alibaba/chat + /status (fallback to Ollama)
+│       ├── DashScopeEnabledCondition.java  # Single source of truth for isDashScopeEnabled (dummy check)
+│       ├── DashScopeManualConfig.java      # Creates DashScopeChatModel when DASHSCOPE_API_KEY != dummy
+│       └── AlibabaChatController.java      # /ai/alibaba/chat + /status (fallback to Ollama)
 └── resources/
-    ├── application.yml             # Ollama + DashScope + vector store config
+    ├── application.yml             # Ollama + DashScope + vector store config (no dead properties)
     └── docs/
         ├── spring-ai-overview.txt  # RAG source doc
         ├── rag-pattern.txt         # RAG source doc
@@ -264,10 +267,15 @@ public class ChatController {
                 .content();
     }
 
-    // RAG — grounded answer from docs/resources/docs/
+    // RAG — grounded answer from docs/resources/docs/ (returns 503 if embedding/LLM unavailable)
     @GetMapping("/ai/rag")
-    public String rag(@RequestParam(value = "question", defaultValue = "What is Spring AI and how does RAG work?") String question) {
-        return ragService.answer(question);
+    public ResponseEntity<String> rag(@RequestParam(value = "question", defaultValue = "What is Spring AI and how does RAG work?") String question) {
+        try {
+            return ResponseEntity.ok(ragService.answer(question));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("RAG error: " + e.getMessage());
+        }
     }
 
     // RAG debug — retrieved chunks without LLM
