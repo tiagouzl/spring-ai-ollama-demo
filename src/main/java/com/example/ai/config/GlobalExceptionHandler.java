@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -30,6 +31,16 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining("; "));
         log.warn("Validation failed: {}", details);
         return build(HttpStatus.BAD_REQUEST, "Validation failed", details, request);
+    }
+
+    /**
+     * Client asked for a representation the endpoint cannot produce (e.g. Accept:
+     * application/json on the Prometheus scrape endpoint, which is text/plain).
+     */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<ApiError> handleNotAcceptable(HttpMediaTypeNotAcceptableException ex, WebRequest request) {
+        log.warn("Not acceptable: {}", ex.getMessage());
+        return build(HttpStatus.NOT_ACCEPTABLE, "Not acceptable", "The requested response format is not available for this endpoint.", request);
     }
 
     @ExceptionHandler(IllegalStateException.class)

@@ -21,6 +21,9 @@
         <java.version>21</java.version>
         <spring-ai.version>1.0.1</spring-ai.version>
         <spring-ai-alibaba.version>1.0.0.4</spring-ai-alibaba.version>
+        <!-- Boot 3.4.5 manages 1.20.6, whose docker-java uses API 1.32 — rejected by
+             Docker Engine 29 (minimum API 1.44). 1.21.4 negotiates the API version. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -83,6 +86,18 @@
             <groupId>org.hsqldb</groupId>
             <artifactId>hsqldb</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <!-- E2E opcional com Ollama real em container (executar com:
+             E2E_OLLAMA=true ./mvnw test -Dtest=OllamaE2EIT -DfailIfNoTests=false) -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>ollama</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
