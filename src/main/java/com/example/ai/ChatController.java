@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
+import com.example.ai.tools.DateTimeTools;
+import com.example.ai.tools.MathTools;
+
 import java.util.UUID;
 
 @RestController
@@ -54,6 +57,16 @@ public class ChatController {
 
         return chatClient.prompt()
                 .advisors(memoryAdvisor)
+                .user(message)
+                .call()
+                .content();
+    }
+
+    /** Chat com function calling / tool use - modelo pode chamar tools Java. */
+    @GetMapping("/ai/chat/tools")
+    public String chatWithTools(@RequestParam(value = "message", defaultValue = "What is the current date and time? Also, what is 15% of 200?") String message) {
+        return chatClient.prompt()
+                .tools(new DateTimeTools(), new MathTools())
                 .user(message)
                 .call()
                 .content();

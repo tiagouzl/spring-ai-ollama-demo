@@ -20,6 +20,7 @@ This project is a clean reference for building AI-agent / LLM applications on th
 - ⚡ Powered by the fluent `ChatClient` API
 - 🔄 **Streaming** responses (Server-Sent Events) with `ChatClient.stream()`
 - 💬 **Multi-turn chat** with per-conversation memory (`MessageChatMemoryAdvisor`)
+- 🛠 **Function calling / Tool use** with `@Tool` — model calls Java methods (`DateTimeTools`, `MathTools`)
 - 🧹 Minimal, dependency-light setup (only `spring-boot-starter-web` + `spring-ai-starter-model-ollama`)
 - 🇨🇳 Aligned with the **Spring AI Alibaba Agent Framework** learning path
 
@@ -119,6 +120,25 @@ curl "http://localhost:8080/ai/chat/memory?sessionId=$SESSION&message=What%20is%
 
 With the same `sessionId`, the model **remembers** the earlier turns.
 
+#### `/ai/chat/tools` — function calling / tool use
+
+The model can call Java methods annotated with `@Tool`. Tools live in [`src/main/java/com/example/ai/tools/`](src/main/java/com/example/ai/tools/):
+
+- `DateTimeTools` — `getCurrentDateTime()`, `getCurrentDate()`, `getCurrentYear()`
+- `MathTools` — `add(a,b)`, `multiply(a,b)`, `percentage(value, percent)`
+
+```bash
+# Date tool — model calls getCurrentDate() and returns the real system date
+curl "http://localhost:8080/ai/chat/tools?message=What%20is%20the%20current%20date%3F%20Use%20the%20tool%20to%20answer."
+# → The current date is 2026-09-01.
+
+# Math tool — model calls percentage(200, 15)
+curl "http://localhost:8080/ai/chat/tools?message=What%20is%2015%20percent%20of%20200%3F%20Use%20the%20percentage%20tool."
+# → 15 percent of 200 is 30.
+```
+
+> ⚠️ Tool calling requires a **tool-capable model**. Validated with `granite4.1:3b`. For best results use `qwen2.5`, `llama3.1`, or `deepseek-r1` via `ollama pull <model>` and update `application.yml`.
+
 ---
 
 ## 📁 Project Structure
@@ -126,10 +146,13 @@ With the same `sessionId`, the model **remembers** the earlier turns.
 ```
 src/main/
 ├── java/com/example/ai/
-│   ├── DemoApplication.java     # Spring Boot entry point
-│   └── ChatController.java      # REST endpoint using ChatClient
+│   ├── DemoApplication.java        # Spring Boot entry point
+│   ├── ChatController.java         # REST endpoints using ChatClient
+│   └── tools/
+│       ├── DateTimeTools.java      # @Tool — current date/time
+│       └── MathTools.java          # @Tool — arithmetic
 └── resources/
-    └── application.yml          # Ollama + model configuration
+    └── application.yml             # Ollama + model configuration
 ```
 
 ### ChatController
@@ -167,6 +190,17 @@ public class ChatController {
                 .build();
         return chatClient.prompt().advisors(memoryAdvisor).user(message).call().content();
     }
+
+    // Function calling — model can invoke Java @Tool methods
+    @GetMapping("/ai/chat/tools")
+    public String chatWithTools(@RequestParam(value = "message",
+            defaultValue = "What is the current date and time? Also, what is 15% of 200?") String message) {
+        return chatClient.prompt()
+                .tools(new DateTimeTools(), new MathTools())
+                .user(message)
+                .call()
+                .content();
+    }
 }
 ```
 
@@ -203,7 +237,7 @@ This is a clean base. Natural next steps (see the Spring AI Alibaba Agent Framew
 
 - ✅ **Streaming** endpoint (SSE) with `ChatClient.stream()`
 - ✅ **Multi-turn** chat with conversation memory
-- 🛠 **Function calling** / **Tool use**
+- ✅ **Function calling** / **Tool use** with `@Tool`
 - 🔍 **RAG** with a vector store
 - 🧩 **Agent + Skill** orchestration (Spring AI Alibaba)
 - 🔒 OIDC / API-key auth on the endpoints
