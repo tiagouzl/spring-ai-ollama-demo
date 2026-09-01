@@ -1,7 +1,10 @@
 package com.example.ai.rag;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -14,6 +17,8 @@ import java.util.List;
 
 @Configuration
 public class RagConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(RagConfig.class);
 
     @Bean
     public VectorStore vectorStore(@Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel,
@@ -30,10 +35,14 @@ public class RagConfig {
                     toDocument(rag, "rag-pattern"),
                     toDocument(ollama, "ollama-local")
             );
-            store.add(docs);
+            // Split documents into token-based chunks so that long sources fit the
+            // small local model's context window and retrieval returns focused passages.
+            List<Document> chunks = new TokenTextSplitter().apply(docs);
+            log.info("[RAG] Ingesting {} document(s) split into {} chunk(s)", docs.size(), chunks.size());
+            store.add(chunks);
         } catch (Exception e) {
             // Do not fail startup when Ollama embeddings are unavailable (e.g. CI).
-            System.err.println("[RAG] Skipped document ingestion (embedding unavailable): " + e.getMessage());
+            log.warn("[RAG] Skipped document ingestion (embedding unavailable): {}", e.getMessage());
         }
         return store;
     }
