@@ -2,6 +2,11 @@ spring:
   application:
     name: spring-ai-ollama-demo
   ai:
+    # Select Ollama as primary chat/embedding model to avoid DashScope/Ollama bean conflict
+    # (both have matchIfMissing=true, so we must explicitly choose one)
+    model:
+      chat: ollama
+      embedding: ollama
     ollama:
       base-url: http://localhost:11434
       chat:
@@ -17,6 +22,15 @@ spring:
     advisors:
       vector-store:
         enabled: false
+    # Alibaba DashScope (Qwen) - cloud model, optional. Set DASHSCOPE_API_KEY env var to enable.
+    # Use 'dummy' as fallback so Spring does not fail at startup when no key is set;
+    # the /ai/alibaba/* endpoints will detect dummy and fallback to Ollama.
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:dummy}
+      chat:
+        options:
+          model: qwen-plus
+          temperature: 0.7
 
 server:
   port: 8080

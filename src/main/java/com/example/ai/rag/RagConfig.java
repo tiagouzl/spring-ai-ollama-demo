@@ -4,6 +4,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,7 +16,7 @@ import java.util.List;
 public class RagConfig {
 
     @Bean
-    public VectorStore vectorStore(EmbeddingModel embeddingModel,
+    public VectorStore vectorStore(@Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel,
                                    @Value("classpath:docs/spring-ai-overview.txt") Resource overview,
                                    @Value("classpath:docs/rag-pattern.txt") Resource rag,
                                    @Value("classpath:docs/ollama-local.txt") Resource ollama) {

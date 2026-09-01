@@ -1,29 +1,32 @@
-# Spring AI + Ollama Demo
+# Spring AI + Ollama Demo · with Spring AI Alibaba (DashScope)
 
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.4-6DB33F?logo=spring&logoColor=white)
-![Spring AI](https://img.shields.io/badge/Spring_AI-1.0.0-green)
+![Spring AI](https://img.shields.io/badge/Spring_AI-1.0.1-green)
+![Spring AI Alibaba](https://img.shields.io/badge/Spring_AI_Alibaba-1.0.0.4-FF6A00)
 ![Ollama](https://img.shields.io/badge/Ollama-granite4.1:3b-000000)
+![DashScope](https://img.shields.io/badge/DashScope-qwen--plus-6B54D2)
 [![Build](https://img.shields.io/github/actions/workflow/status/tiagouzl/spring-ai-ollama-demo/ci.yml?branch=main&label=CI)](https://github.com/tiagouzl/spring-ai-ollama-demo/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A minimal, production-style **Spring Boot 3** application that integrates **Spring AI** with a **local LLM served by Ollama** — no cloud API key required, fully offline and free.
+A minimal, production-style **Spring Boot 3** application that integrates **Spring AI** with a **local LLM served by Ollama** — and optionally with **Alibaba DashScope (Qwen)** via **Spring AI Alibaba** — fully offline by default, cloud-ready when you set `DASHSCOPE_API_KEY`.
 
-This project is a clean reference for building AI-agent / LLM applications on the **Java + Spring** ecosystem, which is widely adopted by enterprises in China (Spring AI Alibaba ecosystem).
+This project is a clean reference for building AI-agent / LLM applications on the **Java + Spring** ecosystem, widely adopted by enterprises in China via the Spring AI Alibaba ecosystem.
 
 ---
 
 ## ✨ Highlights
 
-- 📦 **Spring Boot 3.4** + **Spring AI 1.0.0 (GA)**
-- 🏠 **100% local & free** — uses Ollama, no OpenAI/DashScope key needed
-- ⚡ Powered by the fluent `ChatClient` API
+- 📦 **Spring Boot 3.4** + **Spring AI 1.0.1** + **Spring AI Alibaba 1.0.0.4**
+- 🏠 **100% local & free by default** — uses Ollama, no API key needed
+- ☁️ **Cloud-ready** — flip to Alibaba DashScope (Qwen) by setting `DASHSCOPE_API_KEY`
+- ⚡ Powered by the fluent `ChatClient` API (works with both Ollama and DashScope)
 - 🔄 **Streaming** responses (Server-Sent Events) with `ChatClient.stream()`
 - 💬 **Multi-turn chat** with per-conversation memory (`MessageChatMemoryAdvisor`)
 - 🛠 **Function calling / Tool use** with `@Tool` — model calls Java methods (`DateTimeTools`, `MathTools`)
 - 🔍 **RAG** with `SimpleVectorStore` + `nomic-embed-text` (local embeddings, no external DB)
-- 🧹 Minimal setup — only `spring-boot-starter-web`, `spring-ai-starter-model-ollama`, `spring-ai-vector-store`
-- 🇨🇳 Aligned with the **Spring AI Alibaba Agent Framework** learning path
+- 🧹 Minimal setup — `spring-boot-starter-web`, `spring-ai-starter-model-ollama`, `spring-ai-alibaba-starter-dashscope`
+- 🇨🇳 **Spring AI Alibaba** showcase — local Ollama + cloud DashScope in one codebase
 
 ---
 
@@ -33,9 +36,9 @@ This project is a clean reference for building AI-agent / LLM applications on th
 |-----------|-----------------------------------------------|
 | Language  | Java 21 (LTS)                                 |
 | Framework | Spring Boot 3.4.5                             |
-| AI SDK    | Spring AI 1.0.0 (GA)                          |
-| Model (chat) | Ollama — `granite4.1:3b` (local, free)     |
-| Model (embed) | Ollama — `nomic-embed-text` (768 dims)     |
+| AI SDK    | Spring AI 1.0.1 + Spring AI Alibaba 1.0.0.4   |
+| Model (local) | Ollama — `granite4.1:3b` + `nomic-embed-text` |
+| Model (cloud) | Alibaba DashScope — `qwen-plus` (optional) |
 | Vector Store | `SimpleVectorStore` (in-memory, no DB)      |
 | Build     | Maven 3.9                                     |
 
@@ -77,10 +80,16 @@ ollama pull nomic-embed-text
 ### 2. Run the application
 
 ```bash
+# Local-only (Ollama, no API key needed):
 mvn spring-boot:run
+
+# With Alibaba DashScope (Qwen) — also keeps Ollama for embeddings/local fallback:
+export DASHSCOPE_API_KEY=sk-xxxx
+mvn spring-boot:run
+# Get your key at https://dashscope.console.aliyun.com/apiKey
 ```
 
-Spring Boot starts on **port 8080**.
+Spring Boot starts on **port 8080**. Without `DASHSCOPE_API_KEY`, `/ai/alibaba/*` gracefully falls back to Ollama.
 
 ### 3. API
 
@@ -162,6 +171,26 @@ curl "http://localhost:8080/ai/rag/debug?question=What%20is%20RAG%3F"
 
 > 💡 **No external vector DB required** — `SimpleVectorStore` keeps everything in-memory. On CI without Ollama, document ingestion is skipped gracefully and `/ai/rag` falls back to a non-RAG answer.
 
+#### `/ai/alibaba/chat` — Alibaba DashScope (Qwen) via Spring AI Alibaba
+
+Cloud alternative that reuses the same `ChatClient` API but talks to Alibaba DashScope. When `DASHSCOPE_API_KEY` is not set, it **falls back to Ollama** so the endpoint never fails.
+
+```bash
+# Check status
+curl "http://localhost:8080/ai/alibaba/status"
+# → Alibaba DashScope: NOT CONFIGURED ... will fallback to Ollama
+# → Alibaba DashScope: CONFIGURED — model: qwen-plus
+
+# Chat via DashScope (requires DASHSCOPE_API_KEY)
+export DASHSCOPE_API_KEY=sk-xxxx
+curl "http://localhost:8080/ai/alibaba/chat?message=Hello%20from%20Qwen"
+# Without key (fallback):
+curl "http://localhost:8080/ai/alibaba/chat?message=Hello"
+# → [Alibaba DashScope not configured] ... Ollama fallback ...
+```
+
+> 🔑 Get your DashScope API key at https://dashscope.console.aliyun.com/apiKey — free tier available. The demo validates that the Spring AI Alibaba starter is wired correctly and that the fallback works on CI without a key.
+
 ---
 
 ## 📁 Project Structure
@@ -170,15 +199,18 @@ curl "http://localhost:8080/ai/rag/debug?question=What%20is%20RAG%3F"
 src/main/
 ├── java/com/example/ai/
 │   ├── DemoApplication.java        # Spring Boot entry point
-│   ├── ChatController.java         # REST endpoints using ChatClient
+│   ├── ChatController.java         # REST endpoints (chat, stream, memory, tools, rag)
 │   ├── tools/
 │   │   ├── DateTimeTools.java      # @Tool — current date/time
 │   │   └── MathTools.java          # @Tool — arithmetic
-│   └── rag/
-│       ├── RagConfig.java          # SimpleVectorStore + document ingestion
-│       └── RagService.java         # RAG answer + debug search
+│   ├── rag/
+│   │   ├── RagConfig.java          # SimpleVectorStore (ollamaEmbeddingModel) + ingestion
+│   │   └── RagService.java         # Manual RAG (topK=2) + debug search
+│   └── alibaba/
+│       ├── DashScopeManualConfig.java   # Creates DashScopeChatModel when DASHSCOPE_API_KEY set
+│       └── AlibabaChatController.java   # /ai/alibaba/chat + /status (fallback to Ollama)
 └── resources/
-    ├── application.yml             # Ollama + model configuration
+    ├── application.yml             # Ollama + DashScope + vector store config
     └── docs/
         ├── spring-ai-overview.txt  # RAG source doc
         ├── rag-pattern.txt         # RAG source doc
@@ -257,6 +289,9 @@ Defined in [`src/main/resources/application.yml`](src/main/resources/application
 ```yaml
 spring:
   ai:
+    model:
+      chat: ollama        # ollama | dashscope (both have matchIfMissing=true, must pick one)
+      embedding: ollama
     ollama:
       base-url: http://localhost:11434
       chat:
@@ -266,6 +301,12 @@ spring:
       embedding:
         options:
           model: nomic-embed-text
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:dummy}  # dummy allows startup without key; /ai/alibaba/* falls back
+      chat:
+        options:
+          model: qwen-plus
+          temperature: 0.7
 ```
 
 | Property                          | Description                         |
@@ -274,6 +315,10 @@ spring:
 | `spring.ai.ollama.chat.options.model` | Which local model to use        |
 | `spring.ai.ollama.chat.options.temperature` | Creativity (0–1)       |
 | `spring.ai.ollama.embedding.options.model` | Embedding model for RAG |
+| `spring.ai.model.chat` | `ollama` (primary) — must pick one due to DashScope/Ollama both `matchIfMissing=true` |
+| `spring.ai.model.embedding` | `ollama` (primary) |
+| `spring.ai.dashscope.api-key` | DashScope API key (`DASHSCOPE_API_KEY`, `dummy` allows CI) |
+| `spring.ai.dashscope.chat.options.model` | DashScope model (`qwen-plus`) |
 
 ---
 
@@ -285,6 +330,7 @@ This is a clean base. Natural next steps (see the Spring AI Alibaba Agent Framew
 - ✅ **Multi-turn** chat with conversation memory
 - ✅ **Function calling** / **Tool use** with `@Tool`
 - ✅ **RAG** with `SimpleVectorStore` + `nomic-embed-text` (manual retrieval, grounded answers)
+- ✅ **Spring AI Alibaba** — DashScope (Qwen) via `spring-ai-alibaba-starter-dashscope`, with Ollama fallback
 - 🧩 **Agent + Skill** orchestration (Spring AI Alibaba)
 - 🔒 OIDC / API-key auth on the endpoints
 

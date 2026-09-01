@@ -19,7 +19,8 @@
 
     <properties>
         <java.version>21</java.version>
-        <spring-ai.version>1.0.0</spring-ai.version>
+        <spring-ai.version>1.0.1</spring-ai.version>
+        <spring-ai-alibaba.version>1.0.0.4</spring-ai-alibaba.version>
     </properties>
 
     <dependencies>
@@ -39,6 +40,12 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-advisors-vector-store</artifactId>
+        </dependency>
+        <!-- Spring AI Alibaba DashScope (Qwen) - cloud alternative to Ollama, requires DASHSCOPE_API_KEY -->
+        <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+            <version>${spring-ai-alibaba.version}</version>
         </dependency>
     </dependencies>
 
