@@ -1,6 +1,21 @@
 spring:
   application:
     name: spring-ai-ollama-demo
+  autoconfigure:
+    exclude:
+      # DashScope auto-configurations instantiate API clients that require a non-blank
+      # api-key at startup — even when DashScope is disabled (no DASHSCOPE_API_KEY).
+      # This demo does not use them: the DashScopeChatModel is created manually in
+      # DashScopeManualConfig only when a real key is set, and chat/embedding models
+      # are explicitly pinned to Ollama below (spring.ai.model.*).
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeChatAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAgentAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeImageAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeVideoAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioSpeechAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
   ai:
     # Select Ollama as primary chat/embedding model to avoid DashScope/Ollama bean conflict
     # (both have matchIfMissing=true, so we must explicitly choose one)
@@ -17,12 +32,10 @@ spring:
         options:
           model: nomic-embed-text
     # Alibaba DashScope (Qwen) - cloud model, optional. Set DASHSCOPE_API_KEY env var to enable.
-    # Use 'dummy' as fallback so Spring does not fail at startup when no key is set;
-    # the /ai/alibaba/* endpoints and DashScopeEnabledCondition will detect dummy
-    # and fallback to Ollama. If you change this default, update
-    # DashScopeEnabledCondition.DUMMY accordingly.
+    # When the env var is absent the property resolves to an empty string, which disables
+    # DashScope (see DashScopeEnabledCondition: enabled only when api-key is non-blank).
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY:dummy}
+      api-key: ${DASHSCOPE_API_KEY:}
       chat:
         options:
           model: qwen-plus

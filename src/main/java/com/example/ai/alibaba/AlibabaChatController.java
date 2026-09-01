@@ -1,10 +1,14 @@
 package com.example.ai.alibaba;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
+import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import com.example.ai.api.ChatRequest;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,13 +29,21 @@ public class AlibabaChatController {
     }
 
     private boolean isDashScopeConfigured() {
-        // Keep in sync with DashScopeEnabledCondition.DUMMY and application.yml dashscope.api-key default
-        return dashScopeApiKey != null && !dashScopeApiKey.isBlank()
-                && !DashScopeEnabledCondition.DUMMY.equals(dashScopeApiKey);
+        // Same rule as DashScopeEnabledCondition: enabled only when api-key is non-blank.
+        return dashScopeApiKey != null && !dashScopeApiKey.isBlank();
     }
 
     @GetMapping("/ai/alibaba/chat")
-    public String alibabaChat(@RequestParam(value = "message", defaultValue = "Hello from Alibaba DashScope!") String message) {
+    public String alibabaChatGet(@RequestParam(value = "message", defaultValue = "Hello from Alibaba DashScope!") String message) {
+        return alibabaChat(message);
+    }
+
+    @PostMapping("/ai/alibaba/chat")
+    public String alibabaChatPost(@Valid @RequestBody ChatRequest request) {
+        return alibabaChat(request.message());
+    }
+
+    private String alibabaChat(String message) {
         if (!isDashScopeConfigured()) {
             return """
                     [Alibaba DashScope not configured]

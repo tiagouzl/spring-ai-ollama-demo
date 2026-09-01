@@ -38,7 +38,7 @@ class AlibabaEnabledTest {
     @MockBean
     private OllamaChatModel ollamaChatModel;
 
-    // DashScopeChatModel will be created by DashScopeManualConfig (since api-key != dummy)
+    // DashScopeChatModel will be created by DashScopeManualConfig (api-key property is non-blank)
     // We mock its call as well to avoid needing a real DashScope API
     @MockBean
     private com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel dashScopeChatModel;

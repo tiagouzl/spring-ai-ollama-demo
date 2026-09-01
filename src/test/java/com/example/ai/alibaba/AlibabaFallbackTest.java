@@ -21,16 +21,15 @@ import static org.mockito.Mockito.when;
 /**
  * Regression test for the Alibaba DashScope fallback.
  * <p>
- * When {@code DASHSCOPE_API_KEY} is not set (i.e. {@code spring.ai.dashscope.api-key=dummy}
- * as defined in {@code application.yml} and {@link DashScopeEnabledCondition}),
- * {@code /ai/alibaba/chat} must not fail — it must fallback to the Ollama response.
- * This test locks that behaviour: it starts the full Spring context without a real key,
- * mocks the Ollama model to avoid needing a running Ollama server, and asserts the
- * fallback message and the mocked Ollama content.
+ * When {@code DASHSCOPE_API_KEY} is not set ({@code spring.ai.dashscope.api-key}
+ * resolves to an empty string in {@code application.yml}), {@link DashScopeEnabledCondition}
+ * does not match and {@code /ai/alibaba/chat} must not fail — it must fallback to the
+ * Ollama response. This test locks that behaviour: it starts the full Spring context
+ * without a real key, mocks the Ollama model to avoid needing a running Ollama server,
+ * and asserts the fallback message and the mocked Ollama content.
  * </p>
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.ai.dashscope.api-key=dummy")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AlibabaFallbackTest {
 
     @LocalServerPort
