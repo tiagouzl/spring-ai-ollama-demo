@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 
+import com.example.ai.rag.RagService;
 import com.example.ai.tools.DateTimeTools;
 import com.example.ai.tools.MathTools;
 
@@ -20,11 +21,13 @@ public class ChatController {
 
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
+    private final RagService ragService;
 
-    public ChatController(ChatClient.Builder builder) {
+    public ChatController(ChatClient.Builder builder, RagService ragService) {
         // MessageWindowChatMemory retém as últimas N mensagens por conversa
         // (usa InMemoryChatMemoryRepository por padrão, sem persistência externa)
         this.chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
+        this.ragService = ragService;
 
         this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
     }
@@ -70,5 +73,17 @@ public class ChatController {
                 .user(message)
                 .call()
                 .content();
+    }
+
+    /** RAG — pergunta respondida com contexto dos docs em resources/docs/. */
+    @GetMapping("/ai/rag")
+    public String rag(@RequestParam(value = "question", defaultValue = "What is Spring AI and how does RAG work?") String question) {
+        return ragService.answer(question);
+    }
+
+    /** RAG debug — retorna os chunks recuperados sem chamar LLM. */
+    @GetMapping("/ai/rag/debug")
+    public java.util.List<org.springframework.ai.document.Document> ragDebug(@RequestParam(value = "question", defaultValue = "What is RAG?") String question) {
+        return ragService.debugSearch(question);
     }
 }

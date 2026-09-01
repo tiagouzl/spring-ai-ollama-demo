@@ -21,7 +21,8 @@ This project is a clean reference for building AI-agent / LLM applications on th
 - 🔄 **Streaming** responses (Server-Sent Events) with `ChatClient.stream()`
 - 💬 **Multi-turn chat** with per-conversation memory (`MessageChatMemoryAdvisor`)
 - 🛠 **Function calling / Tool use** with `@Tool` — model calls Java methods (`DateTimeTools`, `MathTools`)
-- 🧹 Minimal, dependency-light setup (only `spring-boot-starter-web` + `spring-ai-starter-model-ollama`)
+- 🔍 **RAG** with `SimpleVectorStore` + `nomic-embed-text` (local embeddings, no external DB)
+- 🧹 Minimal setup — only `spring-boot-starter-web`, `spring-ai-starter-model-ollama`, `spring-ai-vector-store`
 - 🇨🇳 Aligned with the **Spring AI Alibaba Agent Framework** learning path
 
 ---
@@ -33,7 +34,9 @@ This project is a clean reference for building AI-agent / LLM applications on th
 | Language  | Java 21 (LTS)                                 |
 | Framework | Spring Boot 3.4.5                             |
 | AI SDK    | Spring AI 1.0.0 (GA)                          |
-| Model     | Ollama — `granite4.1:3b` (local, free)        |
+| Model (chat) | Ollama — `granite4.1:3b` (local, free)     |
+| Model (embed) | Ollama — `nomic-embed-text` (768 dims)     |
+| Vector Store | `SimpleVectorStore` (in-memory, no DB)      |
 | Build     | Maven 3.9                                     |
 
 ---
@@ -54,7 +57,7 @@ This project is a clean reference for building AI-agent / LLM applications on th
 > sdk install maven
 > ```
 
-### 1. Install Ollama and pull a model
+### 1. Install Ollama and pull models
 
 ```bash
 # Install Ollama (Linux):
@@ -63,11 +66,13 @@ curl -fsSL https://ollama.com/install.sh | sh
 # Start the service:
 ollama serve
 
-# Pull a small, local model (this project uses granite4.1:3b):
+# Chat model (this project uses granite4.1:3b, 3B params, CPU-friendly):
 ollama pull granite4.1:3b
+# Embedding model for RAG (274 MB, 768 dims):
+ollama pull nomic-embed-text
 ```
 
-> 🎯 The demo was validated with **`granite4.1:3b`** (3.4B params, runs on CPU). You can swap it for any model in `src/main/resources/application.yml` (e.g. `qwen2.5`, `llama3.2`, `deepseek-r1`).
+> 🎯 The demo was validated with **`granite4.1:3b`** + **`nomic-embed-text`**. You can swap the chat model in `src/main/resources/application.yml` (e.g. `qwen2.5`, `llama3.2`, `deepseek-r1`).
 
 ### 2. Run the application
 
@@ -139,6 +144,24 @@ curl "http://localhost:8080/ai/chat/tools?message=What%20is%2015%20percent%20of%
 
 > ⚠️ Tool calling requires a **tool-capable model**. Validated with `granite4.1:3b`. For best results use `qwen2.5`, `llama3.1`, or `deepseek-r1` via `ollama pull <model>` and update `application.yml`.
 
+#### `/ai/rag` — Retrieval-Augmented Generation (RAG)
+
+Answers are grounded in local documents under [`src/main/resources/docs/`](src/main/resources/docs/) (`spring-ai-overview.txt`, `rag-pattern.txt`, `ollama-local.txt`). Documents are embedded via `nomic-embed-text` and stored in an in-memory `SimpleVectorStore`; at query time the top-2 similar chunks are injected into the prompt.
+
+```bash
+# Grounded answer — model uses the docs as context
+curl "http://localhost:8080/ai/rag?question=What%20is%20Spring%20AI%3F"
+# → Spring AI is a framework that simplifies building AI-powered applications...
+
+curl "http://localhost:8080/ai/rag?question=How%20to%20run%20models%20locally%20with%20Ollama%3F"
+# → To run models locally with Ollama, you can follow these steps: ollama serve...
+
+# Debug — see which chunks were retrieved (no LLM call)
+curl "http://localhost:8080/ai/rag/debug?question=What%20is%20RAG%3F"
+```
+
+> 💡 **No external vector DB required** — `SimpleVectorStore` keeps everything in-memory. On CI without Ollama, document ingestion is skipped gracefully and `/ai/rag` falls back to a non-RAG answer.
+
 ---
 
 ## 📁 Project Structure
@@ -148,11 +171,18 @@ src/main/
 ├── java/com/example/ai/
 │   ├── DemoApplication.java        # Spring Boot entry point
 │   ├── ChatController.java         # REST endpoints using ChatClient
-│   └── tools/
-│       ├── DateTimeTools.java      # @Tool — current date/time
-│       └── MathTools.java          # @Tool — arithmetic
+│   ├── tools/
+│   │   ├── DateTimeTools.java      # @Tool — current date/time
+│   │   └── MathTools.java          # @Tool — arithmetic
+│   └── rag/
+│       ├── RagConfig.java          # SimpleVectorStore + document ingestion
+│       └── RagService.java         # RAG answer + debug search
 └── resources/
-    └── application.yml             # Ollama + model configuration
+    ├── application.yml             # Ollama + model configuration
+    └── docs/
+        ├── spring-ai-overview.txt  # RAG source doc
+        ├── rag-pattern.txt         # RAG source doc
+        └── ollama-local.txt        # RAG source doc
 ```
 
 ### ChatController
@@ -201,6 +231,18 @@ public class ChatController {
                 .call()
                 .content();
     }
+
+    // RAG — grounded answer from docs/resources/docs/
+    @GetMapping("/ai/rag")
+    public String rag(@RequestParam(value = "question", defaultValue = "What is Spring AI and how does RAG work?") String question) {
+        return ragService.answer(question);
+    }
+
+    // RAG debug — retrieved chunks without LLM
+    @GetMapping("/ai/rag/debug")
+    public List<Document> ragDebug(@RequestParam(value = "question", defaultValue = "What is RAG?") String question) {
+        return ragService.debugSearch(question);
+    }
 }
 ```
 
@@ -221,6 +263,9 @@ spring:
         options:
           model: granite4.1:3b
           temperature: 0.7
+      embedding:
+        options:
+          model: nomic-embed-text
 ```
 
 | Property                          | Description                         |
@@ -228,6 +273,7 @@ spring:
 | `spring.ai.ollama.base-url`       | Where the Ollama API server runs    |
 | `spring.ai.ollama.chat.options.model` | Which local model to use        |
 | `spring.ai.ollama.chat.options.temperature` | Creativity (0–1)       |
+| `spring.ai.ollama.embedding.options.model` | Embedding model for RAG |
 
 ---
 
@@ -238,7 +284,7 @@ This is a clean base. Natural next steps (see the Spring AI Alibaba Agent Framew
 - ✅ **Streaming** endpoint (SSE) with `ChatClient.stream()`
 - ✅ **Multi-turn** chat with conversation memory
 - ✅ **Function calling** / **Tool use** with `@Tool`
-- 🔍 **RAG** with a vector store
+- ✅ **RAG** with `SimpleVectorStore` + `nomic-embed-text` (manual retrieval, grounded answers)
 - 🧩 **Agent + Skill** orchestration (Spring AI Alibaba)
 - 🔒 OIDC / API-key auth on the endpoints
 

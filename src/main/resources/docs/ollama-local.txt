@@ -1,0 +1,15 @@
+Ollama is a tool to run large language models locally.
+It exposes an OpenAI-compatible HTTP API at http://localhost:11434.
+
+Common models:
+- granite4.1:3b — IBM Granite 4.1, 3B params, efficient on CPU (used as chat model here).
+- nomic-embed-text — embedding model (274M params, 768 dims) for RAG / vector search.
+- qwen2.5, llama3.1, deepseek-r1 — larger chat models with stronger tool-calling and reasoning.
+
+Setup:
+  ollama serve
+  ollama pull granite4.1:3b
+  ollama pull nomic-embed-text
+  curl http://localhost:11434/api/tags
+
+Spring AI Ollama integration maps ChatClient and EmbeddingModel to this local server, so the whole stack runs offline and free.

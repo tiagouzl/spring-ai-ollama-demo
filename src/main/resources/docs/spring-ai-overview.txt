@@ -1,0 +1,11 @@
+Spring AI is a framework that simplifies building AI-powered applications on the Spring ecosystem.
+It provides abstractions for ChatClient, EmbeddingModel, VectorStore, and Advisors.
+
+Key concepts:
+- ChatClient: fluent API to interact with LLMs (Ollama, OpenAI, etc.).
+- EmbeddingModel: converts text into vector embeddings for semantic search.
+- VectorStore: stores and retrieves documents by vector similarity.
+- Advisors: intercept and enrich ChatClient calls (memory, RAG, logging).
+- Tools / Function Calling: let the LLM invoke Java methods annotated with @Tool.
+
+This project demonstrates ChatClient with Ollama locally, streaming, memory, tools, and RAG.

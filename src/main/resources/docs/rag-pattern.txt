@@ -1,0 +1,10 @@
+Retrieval-Augmented Generation (RAG) combines a retriever (VectorStore) with a generator (LLM).
+
+Flow:
+1. Documents are split into chunks and embedded via EmbeddingModel (e.g. nomic-embed-text via Ollama).
+2. Chunks + embeddings are stored in a VectorStore (SimpleVectorStore in-memory for this demo).
+3. At query time, the user question is embedded and the top-k similar chunks are retrieved.
+4. Retrieved context is injected into the prompt via QuestionAnswerAdvisor, so the LLM answers grounded in the documents.
+
+Benefits: answers are factual, traceable to source documents, and can be updated without retraining the LLM.
+Trade-offs: quality depends on chunking, embedding model, and the LLM's ability to use context faithfully.

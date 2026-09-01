@@ -8,6 +8,15 @@ spring:
         options:
           model: granite4.1:3b
           temperature: 0.7
+      embedding:
+        options:
+          model: nomic-embed-text
+    vectorstore:
+      simple:
+        initialize-schema: true
+    advisors:
+      vector-store:
+        enabled: false
 
 server:
   port: 8080
