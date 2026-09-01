@@ -1,5 +1,12 @@
 # Spring AI + Ollama Demo
 
+![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.4-6DB33F?logo=spring&logoColor=white)
+![Spring AI](https://img.shields.io/badge/Spring_AI-1.0.0-green)
+![Ollama](https://img.shields.io/badge/Ollama-granite4.1:3b-000000)
+[![Build](https://img.shields.io/github/actions/workflow/status/tiagouzl/spring-ai-ollama-demo/ci.yml?branch=main&label=CI)](https://github.com/tiagouzl/spring-ai-ollama-demo/actions)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A minimal, production-style **Spring Boot 3** application that integrates **Spring AI** with a **local LLM served by Ollama** — no cloud API key required, fully offline and free.
 
 This project is a clean reference for building AI-agent / LLM applications on the **Java + Spring** ecosystem, which is widely adopted by enterprises in China (Spring AI Alibaba ecosystem).
@@ -10,7 +17,9 @@ This project is a clean reference for building AI-agent / LLM applications on th
 
 - 📦 **Spring Boot 3.4** + **Spring AI 1.0.0 (GA)**
 - 🏠 **100% local & free** — uses Ollama, no OpenAI/DashScope key needed
-- ⚡ Simple `ChatClient` API with a single REST endpoint
+- ⚡ Powered by the fluent `ChatClient` API
+- 🔄 **Streaming** responses (Server-Sent Events) with `ChatClient.stream()`
+- 💬 **Multi-turn chat** with per-conversation memory (`MessageChatMemoryAdvisor`)
 - 🧹 Minimal, dependency-light setup (only `spring-boot-starter-web` + `spring-ai-starter-model-ollama`)
 - 🇨🇳 Aligned with the **Spring AI Alibaba Agent Framework** learning path
 
@@ -67,13 +76,48 @@ mvn spring-boot:run
 
 Spring Boot starts on **port 8080**.
 
-### 3. Call the chat endpoint
+### 3. API
+
+All endpoints accept `GET` and return the model's reply in **English** by default (overridable).
+
+#### `/ai/chat` — single, stateless reply
 
 ```bash
 curl "http://localhost:8080/ai/chat?message=Hello%20from%20Spring%20AI"
 ```
 
-**Response:** the model's local reply.
+#### `/ai/chat/stream` — streaming reply (Server-Sent Events)
+
+```bash
+curl -N -H "Accept: text/event-stream" \
+  "http://localhost:8080/ai/chat/stream?message=Tell%20me%20a%20short%20story"
+```
+
+Returns `text/event-stream` with tokens arriving as individual `data:` events in real time (ideal for UI typewriter effects).
+
+```text
+data:1
+
+data:,
+
+data: 
+
+data:2
+```
+
+#### `/ai/chat/memory` — multi-turn chat with memory
+
+Memory is grouped per `sessionId` (the last 20 messages are kept). Create a session, then chat:
+
+```bash
+SESSION=$(curl -s "http://localhost:8080/ai/session")
+echo "session: $SESSION"
+
+curl "http://localhost:8080/ai/chat/memory?sessionId=$SESSION&message=My%20name%20is%20Tiago"
+curl "http://localhost:8080/ai/chat/memory?sessionId=$SESSION&message=What%20is%20my%20name%3F"
+```
+
+With the same `sessionId`, the model **remembers** the earlier turns.
 
 ---
 
@@ -95,19 +139,38 @@ src/main/
 public class ChatController {
 
     private final ChatClient chatClient;
+    private final ChatMemory chatMemory;
 
     public ChatController(ChatClient.Builder builder) {
-        this.chatClient = builder.build();
+        this.chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
+        this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
     }
 
+    // Stateless single reply
     @GetMapping("/ai/chat")
-    public String chat(@RequestParam(value = "message", defaultValue = "O que é Spring AI?") String message) {
+    public String chat(@RequestParam(value = "message", defaultValue = "What is Spring AI?") String message) {
         return chatClient.prompt(message).call().content();
+    }
+
+    // Streaming response (SSE)
+    @GetMapping("/ai/chat/stream")
+    public Flux<String> chatStream(@RequestParam(value = "message", defaultValue = "Tell a short joke") String message) {
+        return chatClient.prompt(message).stream().content();
+    }
+
+    // Multi-turn with per-conversation memory
+    @GetMapping("/ai/chat/memory")
+    public String chatMemory(@RequestParam("sessionId") String sessionId,
+                             @RequestParam("message") String message) {
+        var memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory)
+                .conversationId(sessionId)
+                .build();
+        return chatClient.prompt().advisors(memoryAdvisor).user(message).call().content();
     }
 }
 ```
 
-The **`ChatClient`** is auto-configured by the Spring AI starter — one dependency and a couple of properties is all it takes.
+The **`ChatClient`** is auto-configured by the Spring AI starter — one dependency and a couple of properties is all it takes. Memory is handled by **`MessageChatMemoryAdvisor`**, which stores and injects the recent conversation history automatically per `conversationId`.
 
 ---
 
@@ -138,11 +201,12 @@ spring:
 
 This is a clean base. Natural next steps (see the Spring AI Alibaba Agent Framework path):
 
-- ➕ **Streaming** endpoint (SSE) with `ChatClient.stream()`
-- 💬 **Multi-turn** chat with conversation memory
+- ✅ **Streaming** endpoint (SSE) with `ChatClient.stream()`
+- ✅ **Multi-turn** chat with conversation memory
 - 🛠 **Function calling** / **Tool use**
 - 🔍 **RAG** with a vector store
 - 🧩 **Agent + Skill** orchestration (Spring AI Alibaba)
+- 🔒 OIDC / API-key auth on the endpoints
 
 ---
 
