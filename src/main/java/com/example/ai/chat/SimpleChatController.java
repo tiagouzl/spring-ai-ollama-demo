@@ -1,6 +1,7 @@
 package com.example.ai.chat;
 
 import com.example.ai.api.ChatRequest;
+import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,8 +20,7 @@ public class SimpleChatController {
     }
 
     @PostMapping("/ai/chat")
-    public String chatPost(@RequestBody ChatRequest request) {
-        String message = request.message() != null ? request.message() : "What is Spring AI?";
-        return chatClient.prompt(message).call().content();
+    public String chatPost(@Valid @RequestBody ChatRequest request) {
+        return chatClient.prompt(request.message()).call().content();
     }
 }

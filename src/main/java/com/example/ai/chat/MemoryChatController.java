@@ -1,6 +1,7 @@
 package com.example.ai.chat;
 
 import com.example.ai.api.MemoryChatRequest;
+import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -31,7 +32,7 @@ public class MemoryChatController {
     }
 
     @PostMapping("/ai/chat/memory")
-    public String memoryPost(@RequestBody MemoryChatRequest request) {
+    public String memoryPost(@Valid @RequestBody MemoryChatRequest request) {
         return callWithMemory(request.sessionId(), request.message());
     }
 

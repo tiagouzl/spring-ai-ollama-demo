@@ -1,6 +1,7 @@
 package com.example.ai.rag;
 
 import com.example.ai.api.RagRequest;
+import jakarta.validation.Valid;
 import org.springframework.ai.document.Document;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,9 +24,8 @@ public class RagController {
     }
 
     @PostMapping("/ai/rag")
-    public ResponseEntity<String> ragPost(@RequestBody RagRequest request) {
-        String question = request.question() != null ? request.question() : "What is Spring AI and how does RAG work?";
-        return answer(question);
+    public ResponseEntity<String> ragPost(@Valid @RequestBody RagRequest request) {
+        return answer(request.question());
     }
 
     @GetMapping("/ai/rag/debug")
@@ -34,9 +34,8 @@ public class RagController {
     }
 
     @PostMapping("/ai/rag/debug")
-    public List<Document> debugPost(@RequestBody RagRequest request) {
-        String question = request.question() != null ? request.question() : "What is RAG?";
-        return ragService.debugSearch(question);
+    public List<Document> debugPost(@Valid @RequestBody RagRequest request) {
+        return ragService.debugSearch(request.question());
     }
 
     private ResponseEntity<String> answer(String question) {

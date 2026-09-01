@@ -1,3 +1,5 @@
 package com.example.ai.api;
 
-public record ChatRequest(String message) {}
+import jakarta.validation.constraints.NotBlank;
+
+public record ChatRequest(@NotBlank(message = "message is required and must not be blank") String message) {}

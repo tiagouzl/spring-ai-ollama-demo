@@ -1,6 +1,7 @@
 package com.example.ai.chat;
 
 import com.example.ai.api.ChatRequest;
+import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -21,8 +22,7 @@ public class StreamChatController {
     }
 
     @PostMapping(value = "/ai/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> streamPost(@RequestBody ChatRequest request) {
-        String message = request.message() != null ? request.message() : "Tell a short joke";
-        return chatClient.prompt(message).stream().content();
+    public Flux<String> streamPost(@Valid @RequestBody ChatRequest request) {
+        return chatClient.prompt(request.message()).stream().content();
     }
 }

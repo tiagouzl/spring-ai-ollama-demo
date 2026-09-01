@@ -3,6 +3,7 @@ package com.example.ai.chat;
 import com.example.ai.api.ChatRequest;
 import com.example.ai.tools.DateTimeTools;
 import com.example.ai.tools.MathTools;
+import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,9 +22,8 @@ public class ToolsChatController {
     }
 
     @PostMapping("/ai/chat/tools")
-    public String toolsPost(@RequestBody ChatRequest request) {
-        String message = request.message() != null ? request.message() : "What is the current date and time? Also, what is 15% of 200?";
-        return callWithTools(message);
+    public String toolsPost(@Valid @RequestBody ChatRequest request) {
+        return callWithTools(request.message());
     }
 
     private String callWithTools(String message) {

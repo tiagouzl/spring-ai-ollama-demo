@@ -1,3 +1,5 @@
 package com.example.ai.api;
 
-public record RagRequest(String question) {}
+import jakarta.validation.constraints.NotBlank;
+
+public record RagRequest(@NotBlank(message = "question is required and must not be blank") String question) {}
