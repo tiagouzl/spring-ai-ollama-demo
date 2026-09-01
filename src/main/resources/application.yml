@@ -1,6 +1,14 @@
 spring:
   application:
     name: spring-ai-ollama-demo
+  # Persistence for multi-turn chat memory (JdbcChatMemoryRepository).
+  # HSQLDB in file mode under ./data — conversations survive restarts.
+  # For production: point spring.datasource.* at PostgreSQL (schema is created
+  # automatically by the Spring AI JDBC chat-memory starter).
+  datasource:
+    url: jdbc:hsqldb:file:./data/chat-memory;ifexists=false
+    username: sa
+    password: ""
   autoconfigure:
     exclude:
       # DashScope auto-configurations instantiate API clients that require a non-blank
@@ -17,6 +25,15 @@ spring:
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
   ai:
+    # Persistent multi-turn chat memory (JdbcChatMemoryRepository backed by the
+    # file-based HSQLDB above). 'always' + continueOnError: the schema is
+    # (re)created when missing and safely ignored when tables already exist
+    # across restarts.
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: always
     # Select Ollama as primary chat/embedding model to avoid DashScope/Ollama bean conflict
     # (both have matchIfMissing=true, so we must explicitly choose one)
     model:
@@ -43,6 +60,12 @@ spring:
 
 server:
   port: 8080
+
+# File-based persistence for the RAG vector store (SimpleVectorStore.save/load).
+# Embeddings are computed once and reused on subsequent startups.
+app:
+  rag:
+    persistence-path: ./data/vector-store.json
 
 # Observability: health/metrics + Prometheus scrape endpoint.
 # Spring AI's chat observations (spring.ai.*) are exported automatically

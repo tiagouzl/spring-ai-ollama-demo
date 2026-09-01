@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 
+import java.io.File;
 import java.util.List;
 
 @Configuration
@@ -24,8 +25,23 @@ public class RagConfig {
     public VectorStore vectorStore(@Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel,
                                    @Value("classpath:docs/spring-ai-overview.txt") Resource overview,
                                    @Value("classpath:docs/rag-pattern.txt") Resource rag,
-                                   @Value("classpath:docs/ollama-local.txt") Resource ollama) {
+                                   @Value("classpath:docs/ollama-local.txt") Resource ollama,
+                                   @Value("${app.rag.persistence-path:./data/vector-store.json}") File persistenceFile) {
         SimpleVectorStore store = SimpleVectorStore.builder(embeddingModel).build();
+
+        // Reuse previously computed embeddings when available — startup is faster
+        // and works fully offline even before the first embedding call.
+        if (persistenceFile.exists()) {
+            try {
+                store.load(persistenceFile);
+                log.info("[RAG] Loaded persisted vector store from {} ({} bytes)",
+                        persistenceFile.getAbsolutePath(), persistenceFile.length());
+                return store;
+            } catch (Exception e) {
+                log.warn("[RAG] Could not load persisted vector store ({}); re-ingesting",
+                        e.getMessage());
+            }
+        }
 
         // Ingest documents at startup; on CI without Ollama embeddings this will be skipped
         // (embedding call fails) and RAG endpoint will return a hint instead of crashing boot.
@@ -40,6 +56,12 @@ public class RagConfig {
             List<Document> chunks = new TokenTextSplitter().apply(docs);
             log.info("[RAG] Ingesting {} document(s) split into {} chunk(s)", docs.size(), chunks.size());
             store.add(chunks);
+            // Persist embeddings so subsequent restarts skip the embedding calls.
+            if (persistenceFile.getParentFile() != null) {
+                persistenceFile.getParentFile().mkdirs();
+            }
+            store.save(persistenceFile);
+            log.info("[RAG] Persisted vector store to {}", persistenceFile.getAbsolutePath());
         } catch (Exception e) {
             // Do not fail startup when Ollama embeddings are unavailable (e.g. CI).
             log.warn("[RAG] Skipped document ingestion (embedding unavailable): {}", e.getMessage());

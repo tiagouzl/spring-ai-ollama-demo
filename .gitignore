@@ -19,3 +19,6 @@ target/
 # Local config / secrets (never commit real keys)
 .env
 application-local.yml
+
+# Runtime persistence (chat memory DB + RAG vector store)
+data/
