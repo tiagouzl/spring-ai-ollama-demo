@@ -25,7 +25,9 @@ public class AlibabaChatController {
     }
 
     private boolean isDashScopeConfigured() {
-        return dashScopeApiKey != null && !dashScopeApiKey.isBlank() && !"dummy".equals(dashScopeApiKey);
+        // Keep in sync with DashScopeEnabledCondition.DUMMY and application.yml dashscope.api-key default
+        return dashScopeApiKey != null && !dashScopeApiKey.isBlank()
+                && !DashScopeEnabledCondition.DUMMY.equals(dashScopeApiKey);
     }
 
     @GetMapping("/ai/alibaba/chat")

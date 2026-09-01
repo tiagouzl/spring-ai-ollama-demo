@@ -8,8 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-// Only create DashScope bean when api-key is actually set (not dummy/empty)
-@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("'${spring.ai.dashscope.api-key:dummy}' != 'dummy'")
+@org.springframework.context.annotation.Conditional(DashScopeEnabledCondition.class)
 public class DashScopeManualConfig {
 
     @Bean

@@ -24,7 +24,9 @@ spring:
         enabled: false
     # Alibaba DashScope (Qwen) - cloud model, optional. Set DASHSCOPE_API_KEY env var to enable.
     # Use 'dummy' as fallback so Spring does not fail at startup when no key is set;
-    # the /ai/alibaba/* endpoints will detect dummy and fallback to Ollama.
+    # the /ai/alibaba/* endpoints and DashScopeEnabledCondition will detect dummy
+    # and fallback to Ollama. If you change this default, update
+    # DashScopeEnabledCondition.DUMMY accordingly.
     dashscope:
       api-key: ${DASHSCOPE_API_KEY:dummy}
       chat:
