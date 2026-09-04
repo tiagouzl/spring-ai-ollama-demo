@@ -168,5 +168,17 @@ Rodada de correções baseada na revisão cruzada de duas análises externas do 
 
 **Validação:** suíte completa `./mvnw test` → **25 testes, 0 falhas** (novos: `StructuredChatTest` 2, `OpenApiDocsTest` 2); `docker compose config` validado.
 
-**Não implementado (roadmap):** agentes Spring AI Alibaba (Agent+Skill), OIDC/JWT via Spring Security completo, guardrails dedicados, rate limit compartilhado, gestão do Alibaba via BOM e cache semântico — documentados no README.
+**Não implementado (roadmap):** agentes Spring AI Alibaba (Agent+Skill), OIDC/JWT via Spring Security completo, guardrails dedicados, rate limit compartilhado e cache semântico — documentados no README.
+
+---
+
+## 11. Cache Semântico e Gestão do Alibaba via BOM (04/09/2026)
+
+1. **Cache semântico opt-in** — novo `cache/SemanticCache` (@Component, `app.cache.semantic.enabled=false` por padrão): antes de chamar o modelo, a mensagem é embedada e comparada por cosseno (`similarity-threshold` 0.95, texto idêntico ≈ 1.0) com respostas anteriores; hit → resposta em cache (economia de tokens/latência). TTL (`ttl-seconds` 3600) e teto (`max-entries` 1000) com evicção lazy. **Fail-safe por design**: qualquer erro de embedding só faz bypass do cache (nunca quebra o chat). Integrado ao `/ai/chat` (GET/POST). Em memória, por instância — para multi-instância usar Redis.
+
+2. **Alibaba gerenciado por BOM próprio** — `pom.xml` agora importa `com.alibaba.cloud.ai:spring-ai-alibaba-bom:1.0.0.4` no `dependencyManagement` (mesma versão da propriedade `spring-ai-alibaba.version`); o starter `spring-ai-alibaba-starter-dashscope` perdeu a versão fixada e passa a ser gerenciado como o resto das dependências.
+
+**Validação:** suíte completa `./mvnw test` → **27 testes, 0 falhas** (novos: `SemanticCacheTest` 2, com `@DirtiesContext` por teste para isolar o cache compartilhado e `@MockBean VectorStore` para não gravar um vector store fake no `./data`).
+
+**Não implementado (roadmap):** agentes Spring AI Alibaba (Agent+Skill), OIDC/JWT via Spring Security completo, guardrails dedicados e rate limit compartilhado entre instâncias — documentados no README.
 

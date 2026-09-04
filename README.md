@@ -29,6 +29,7 @@ This project is a clean reference for building AI-agent / LLM applications on th
 - 💾 **Persistence** — multi-turn chat memory stored in a JDBC repository (file-based HSQLDB under `./data/`, survives restarts — swap `spring.datasource.*` to PostgreSQL for production); RAG embeddings persisted to disk and reused on startup
 - 🔍 **RAG** with `SimpleVectorStore` + `TokenTextSplitter` chunking + `nomic-embed-text` (local embeddings, no external DB)
 - 🧱 **Structured output** — `/ai/chat/structured` returns a typed record (not raw text) via `ChatClient.entity()`
+- 💾 **Semantic cache** (opt-in) — similar questions on `/ai/chat` skip the model call, saving tokens/latency
 - 📖 **OpenAPI/Swagger UI** — interactive API docs at `/swagger-ui.html` (spec at `/v3/api-docs`)
 - 🐳 **Docker Compose** — one command brings up Ollama + app, models pulled automatically
 - 🧹 Minimal setup — `spring-boot-starter-web`, `spring-ai-starter-model-ollama`, `spring-ai-alibaba-starter-dashscope`
@@ -124,6 +125,8 @@ curl -N -X POST "http://localhost:8080/ai/chat/stream" \
 ```
 
 Returns `text/event-stream` with tokens arriving as individual `data:` events in real time (ideal for UI typewriter effects).
+
+> 💡 **Semantic cache (opt-in):** with `app.cache.semantic.enabled=true`, `/ai/chat` embeds the message and returns the cached reply for similar past questions instead of calling the model. Fail-safe — any embedding error simply bypasses the cache.
 
 ```text
 data:1
@@ -421,6 +424,10 @@ spring:
 | `app.auth.api-key` | When set, `/ai/**` requires an `X-API-Key` header (401 otherwise). Empty = open (demo default) |
 | `app.rate-limit.requests-per-minute` | Max requests/minute per client on `/ai/**` (default `60`; `<= 0` disables). In-memory, per-instance |
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
+| `app.cache.semantic.enabled` | Semantic cache for `/ai/chat` (default `false` — opt-in, in-memory, fail-safe) |
+| `app.cache.semantic.similarity-threshold` | Cosine similarity required for a cache hit (default `0.95`; identical text ≈ 1.0) |
+| `app.cache.semantic.ttl-seconds` | Entry lifetime before eviction (default `3600`) |
+| `app.cache.semantic.max-entries` | Max cached entries (default `1000`) |
 
 ---
 
@@ -437,6 +444,8 @@ This is a clean base. Natural next steps (see the Spring AI Alibaba Agent Framew
 - ✅ **Structured output** — typed records via `ChatClient.entity()` (`/ai/chat/structured`)
 - ✅ **OpenAPI/Swagger UI** — springdoc at `/swagger-ui.html` / `/v3/api-docs`
 - ✅ **Docker Compose** — Ollama + app in one command, models pulled automatically
+- ✅ **Semantic cache** (opt-in, in-memory) — similar questions skip the model on `/ai/chat`
+- ✅ **Spring AI Alibaba via its own BOM** — `spring-ai-alibaba-bom` manages the DashScope starter version
 - 🧩 **Agent + Skill** orchestration (Spring AI Alibaba)
 - 🔒 Full OIDC / JWT auth via Spring Security (the current API key is a lightweight demo-grade option)
 

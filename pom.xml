@@ -55,11 +55,11 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-advisors-vector-store</artifactId>
         </dependency>
-        <!-- Spring AI Alibaba DashScope (Qwen) - cloud alternative to Ollama, requires DASHSCOPE_API_KEY -->
+        <!-- Spring AI Alibaba DashScope (Qwen) - cloud alternative to Ollama, requires DASHSCOPE_API_KEY.
+             Version comes from the spring-ai-alibaba-bom imported in dependencyManagement. -->
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
-            <version>${spring-ai-alibaba.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -116,6 +116,15 @@
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
                 <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Own BOM for the Spring AI Alibaba artifacts (com.alibaba.cloud.ai):
+                 keeps the DashScope starter version managed alongside the rest. -->
+            <dependency>
+                <groupId>com.alibaba.cloud.ai</groupId>
+                <artifactId>spring-ai-alibaba-bom</artifactId>
+                <version>${spring-ai-alibaba.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

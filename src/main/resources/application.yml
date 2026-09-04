@@ -89,6 +89,19 @@ app:
     # message reaches the model (heuristic prompt-injection protection — not a
     # substitute for a real guardrails layer).
     blocked-phrases: ignore previous instructions, ignore all previous instructions, ignore the system prompt, disregard all previous instructions, you are now, new system prompt
+  cache:
+    semantic:
+      # Semantic cache for /ai/chat: embeds the message and answers from the cache
+      # when a similar past question exists. Opt-in (off by default) — embedding
+      # every request costs tokens/CPU. Fail-safe: any error bypasses the cache.
+      # In-memory, per instance; use a shared store for multi-instance deployments.
+      enabled: false
+      # Cosine similarity required for a cache hit (identical text ≈ 1.0).
+      similarity-threshold: 0.95
+      # Entry lifetime in seconds; entries are evicted lazily on store.
+      ttl-seconds: 3600
+      # Max cached entries before eviction.
+      max-entries: 1000
 
 # Observability: health/metrics + Prometheus scrape endpoint.
 # Spring AI's chat observations (spring.ai.*) are exported automatically
