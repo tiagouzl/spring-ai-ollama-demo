@@ -1,0 +1,51 @@
+# One-command stack: Ollama (local LLM server) + the Spring AI app.
+#
+#   docker compose up --build
+#
+# On the first run the ollama-pull service downloads granite4.1:3b (~2 GB) and
+# nomic-embed-text (~274 MB); the app starts only after both are ready.
+# The app's ./data directory (HSQLDB chat memory + persisted vector store) is
+# mounted from the host, so conversations and embeddings survive restarts.
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: spring-ai-ollama
+    volumes:
+      - ./data/ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: spring-ai-ollama-pull
+    volumes:
+      - ./data/ollama:/root/.ollama
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "ollama pull granite4.1:3b && ollama pull nomic-embed-text"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build: .
+    container_name: spring-ai-ollama-demo
+    ports:
+      - "8080:8080"
+    environment:
+      # Point the app at the Ollama container instead of localhost:11434.
+      SPRING_AI_OLLAMA_BASEURL: http://ollama:11434
+      # Optional: protect /ai/** with an X-API-Key header (empty = open).
+      APP_API_KEY: ${APP_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      ollama-pull:
+        condition: service_completed_successfully
+    restart: unless-stopped

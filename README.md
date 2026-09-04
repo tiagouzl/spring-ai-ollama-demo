@@ -28,6 +28,9 @@ This project is a clean reference for building AI-agent / LLM applications on th
 - 📊 **Observability** — Spring Boot Actuator with `/actuator/health` and a Prometheus scrape endpoint (`/actuator/prometheus`); Spring AI chat observations are exported automatically
 - 💾 **Persistence** — multi-turn chat memory stored in a JDBC repository (file-based HSQLDB under `./data/`, survives restarts — swap `spring.datasource.*` to PostgreSQL for production); RAG embeddings persisted to disk and reused on startup
 - 🔍 **RAG** with `SimpleVectorStore` + `TokenTextSplitter` chunking + `nomic-embed-text` (local embeddings, no external DB)
+- 🧱 **Structured output** — `/ai/chat/structured` returns a typed record (not raw text) via `ChatClient.entity()`
+- 📖 **OpenAPI/Swagger UI** — interactive API docs at `/swagger-ui.html` (spec at `/v3/api-docs`)
+- 🐳 **Docker Compose** — one command brings up Ollama + app, models pulled automatically
 - 🧹 Minimal setup — `spring-boot-starter-web`, `spring-ai-starter-model-ollama`, `spring-ai-alibaba-starter-dashscope`
 - 🇨🇳 **Spring AI Alibaba** showcase — local Ollama + cloud DashScope in one codebase
 
@@ -170,6 +173,16 @@ curl -X POST "http://localhost:8080/ai/chat/tools" -H "Content-Type: application
 
 > ⚠️ Tool calling requires a **tool-capable model**. Validated with `granite4.1:3b`. For best results use `qwen2.5`, `llama3.1`, or `deepseek-r1` via `ollama pull <model>` and update `application.yml`.
 
+#### `/ai/chat/structured` — typed output (JSON, not raw text)
+
+```bash
+curl "http://localhost:8080/ai/chat/structured?message=Spring%20AI%20makes%20building%20AI%20apps%20easy"
+# → {"topic":"Spring AI","sentiment":"positive","rating":9}
+# POST also available (same ChatRequest body)
+```
+
+Instead of returning the model's raw text, the reply is parsed into a typed `TopicSentiment` record (`topic`, `sentiment`, `rating`) via `ChatClient.call().entity()`. Swap the record for your own class (JSON Schema is generated automatically) — this is the pattern for building typed APIs on top of LLMs.
+
 #### `/ai/rag` — Retrieval-Augmented Generation (RAG)
 
 Answers are grounded in local documents under [`src/main/resources/docs/`](src/main/resources/docs/) (`spring-ai-overview.txt`, `rag-pattern.txt`, `ollama-local.txt`). Documents are split into token-based chunks (`TokenTextSplitter`) so retrieval returns focused passages that fit the local model's context window, embedded via `nomic-embed-text` and stored in an in-memory `SimpleVectorStore` (**demo-only, resets on restart** — see Roadmap for production evolution); at query time the top-2 similar chunks are injected into the prompt. Only chunks above `app.rag.similarity-threshold` (default `0.5`, cosine) are used — below it the question is answered without retrieval instead of forcing irrelevant context (which would cause hallucinated answers).
@@ -237,6 +250,23 @@ curl -X POST "http://localhost:8080/ai/chat" -H "Content-Type: application/json"
 > ⚠️ The prompt guard is a **heuristic** first line of defence, not a real guardrails
 > layer, and the rate limiter is in-memory (per instance). For production use Spring
 > Security (OIDC/JWT) plus a shared rate-limit store (Redis/Bucket4j).
+
+### Docker (one-command stack)
+
+```bash
+docker compose up --build
+```
+
+Brings up **Ollama** (with `granite4.1:3b` + `nomic-embed-text` pulled automatically on first run) and the **app** on `http://localhost:8080`. The app's `./data` (HSQLDB chat memory + persisted vector store) is mounted from the host, so conversations and embeddings survive restarts. Optional: `APP_API_KEY=secret docker compose up --build` to enable the `X-API-Key` guard. Build only the app image: `docker build -t spring-ai-ollama-demo .`
+
+### Interactive API docs (OpenAPI/Swagger)
+
+```bash
+# Spec (JSON): http://localhost:8080/v3/api-docs
+# UI:            http://localhost:8080/swagger-ui.html
+```
+
+Generated automatically by springdoc from the controllers — no annotations needed for the basics.
 
 ---
 
@@ -404,6 +434,9 @@ This is a clean base. Natural next steps (see the Spring AI Alibaba Agent Framew
 - ✅ **RAG** with `SimpleVectorStore` + `nomic-embed-text` (manual retrieval, grounded answers)
 - ✅ **Spring AI Alibaba** — DashScope (Qwen) via `spring-ai-alibaba-starter-dashscope`, with Ollama fallback
 - ✅ **API-key auth + rate limiting + prompt-injection guard** (opt-in, lightweight interceptors)
+- ✅ **Structured output** — typed records via `ChatClient.entity()` (`/ai/chat/structured`)
+- ✅ **OpenAPI/Swagger UI** — springdoc at `/swagger-ui.html` / `/v3/api-docs`
+- ✅ **Docker Compose** — Ollama + app in one command, models pulled automatically
 - 🧩 **Agent + Skill** orchestration (Spring AI Alibaba)
 - 🔒 Full OIDC / JWT auth via Spring Security (the current API key is a lightweight demo-grade option)
 

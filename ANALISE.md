@@ -156,3 +156,17 @@ Rodada de correções baseada na revisão cruzada de duas análises externas do 
 
 **Não implementado (roadmap):** OIDC/JWT via Spring Security completo, guardrails dedicados (ex. NeMo), rate limit compartilhado entre instâncias, gestão do `spring-ai-alibaba` via BOM, output estruturado e cache semântico — permanecem como evolução futura documentada no README.
 
+---
+
+## 10. Roadmap: Docker Compose, OpenAPI e Output Estruturado (04/09/2026)
+
+1. **Output estruturado** — novo endpoint `/ai/chat/structured` (GET/POST): a resposta do LLM é parseada no record tipado `TopicSentiment(topic, sentiment, rating)` via `ChatClient.call().entity(Class)` (JSON Schema gerado automaticamente pelo Spring AI). É o padrão para APIs tipadas em cima de LLMs.
+
+2. **OpenAPI/Swagger** — adicionado `springdoc-openapi-starter-webmvc-ui` 2.8.17 (compatível com Boot 3.4): spec em `/v3/api-docs` e UI interativa em `/swagger-ui.html`, gerados automaticamente dos controllers. Fora do escopo do guard `/ai/**`, então docs ficam públicas.
+
+3. **Docker Compose** — novo `Dockerfile` multi-stage (build Maven → runtime Temurin 21 JRE, jar final ~) e `docker-compose.yml` com três serviços: `ollama` (healthcheck), `ollama-pull` (baixa `granite4.1:3b` + `nomic-embed-text` uma vez, `service_completed_successfully` como gate) e `app` (aponta para `http://ollama:11434` via `SPRING_AI_OLLAMA_BASEURL`, monta `./data:/app/data` para persistir memória/vector store, `APP_API_KEY` opcional). `.dockerignore` exclui `target/`, `.git/`, `data/`.
+
+**Validação:** suíte completa `./mvnw test` → **25 testes, 0 falhas** (novos: `StructuredChatTest` 2, `OpenApiDocsTest` 2); `docker compose config` validado.
+
+**Não implementado (roadmap):** agentes Spring AI Alibaba (Agent+Skill), OIDC/JWT via Spring Security completo, guardrails dedicados, rate limit compartilhado, gestão do Alibaba via BOM e cache semântico — documentados no README.
+
