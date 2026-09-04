@@ -1,6 +1,7 @@
 package com.example.ai.chat;
 
 import com.example.ai.api.MemoryChatRequest;
+import com.example.ai.security.PromptGuard;
 import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -14,10 +15,12 @@ public class MemoryChatController {
 
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
+    private final PromptGuard promptGuard;
 
-    public MemoryChatController(ChatClient.Builder builder, ChatMemory chatMemory) {
+    public MemoryChatController(ChatClient.Builder builder, ChatMemory chatMemory, PromptGuard promptGuard) {
         this.chatMemory = chatMemory;
         this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
+        this.promptGuard = promptGuard;
     }
 
     @GetMapping("/ai/session")
@@ -37,6 +40,7 @@ public class MemoryChatController {
     }
 
     private String callWithMemory(String sessionId, String message) {
+        promptGuard.validate(message);
         var advisor = MessageChatMemoryAdvisor.builder(chatMemory)
                 .conversationId(sessionId)
                 .build();

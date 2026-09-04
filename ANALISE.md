@@ -126,3 +126,33 @@ Itens da seção 4 que foram implementados e validados:
 
 **Validação:** suíte completa `./mvnw test` → 12 testes, 0 falhas; E2E real executado localmente (`OllamaE2EIT`) → 3 testes, 0 falhas, com Docker 29.1.3 (requer override `testcontainers.version=1.21.4`, pois o Boot 3.4.5 gerencia 1.20.6, cujo docker-java usa API 1.32 — rejeitada pelo Docker 29). O log do E2E confirmou a persistência do vector store: `[RAG] Loaded persisted vector store from ./data/vector-store.json (33448 bytes)`. `data/` adicionado ao `.gitignore`.
 
+---
+
+## 9. Endurecimento de Segurança e Qualidade de API (04/09/2026)
+
+Rodada de correções baseada na revisão cruzada de duas análises externas do repositório. As análises originais estavam desatualizadas (descreviam o commit `1a49fad`); os itens ainda válidos foram implementados nesta rodada:
+
+1. **Threshold de similaridade no RAG** — `RagService` agora aplica `SearchRequest.similarityThreshold()` com `app.rag.similarity-threshold` (default `0.5`, cosseno). Abaixo do threshold, a pergunta é respondida **sem** recuperação (`[Note: no relevant context found...]`) em vez de forçar contexto irrelevante no prompt (que causava respostas alucinadas).
+
+2. **`/ai/rag/debug` sem vazamento de API interna** — novo record público `RagDebugDocument(id, text, score, metadata)`; o endpoint não expõe mais `org.springframework.ai.document.Document` (se o Spring AI mudar essa classe, a API pública não quebra).
+
+3. **Erro 503 do RAG sanitizado** — `RagController` não expõe mais `e.getClass().getSimpleName()`/`e.getMessage()`; loga o detalhe no servidor e retorna mensagem fixa com dica acionável.
+
+4. **CORS global** — novo `CorsConfig` (`WebMvcConfigurer`) libera `/ai/**` para origens configuráveis via `app.cors.allowed-origins` (default `*`; estreitar em produção).
+
+5. **Deduplicação do DashScope** — `DashScopeEnabledCondition.isEnabled(apiKey)` virou fonte única de verdade; `matches()` e `AlibabaChatController` delegam a ela (a regra não pode mais divergir entre condição e controller).
+
+6. **Autenticação por API key (opt-in)** — `security/ApiKeyAuthInterceptor`: quando `app.auth.api-key` (ou `APP_API_KEY`) está definida, todo `/ai/**` exige header `X-API-Key` → 401 estruturado. Vazia = endpoints abertos (padrão demo).
+
+7. **Rate limiting** — `security/RateLimitInterceptor`: janela fixa por cliente (header `X-API-Key` se presente, senão IP), `app.rate-limit.requests-per-minute` (default 60, `<=0` desabilita) → 429 estruturado. Em memória (por instância); para multi-instância usar Redis/Bucket4j. Autenticação roda **antes** do rate limit (401 não consome cota).
+
+8. **Guarda contra prompt injection** — `security/PromptGuard`: blocklist case-insensitive configurável (`app.prompt-guard.blocked-phrases`) rejeitada com 400 antes do modelo, aplicada em todos os pontos de entrada (chat simples, stream, memory, tools, RAG, Alibaba). Documentado como heurística — não substitui uma camada real de guardrails.
+
+9. **Erro do DashScope não é mais mascarado em HTTP 200** — falha real na chamada à API → **502** (sem fallback silencioso; detalhe só no log, APM enxerga a falha); key setada mas bean ausente → 503. O fallback de "não configurado" (sem key) permanece 200 — comportamento documentado e testado.
+
+**Decisão de design:** interceptors leves sem novas dependências (sem Spring Security/Bucket4j) para manter o demo autocontido; o caminho de produção (Spring Security/OIDC, rate limit compartilhado) está documentado no README.
+
+**Validação:** suíte completa `./mvnw test` → **21 testes, 0 falhas** (novos: `ApiKeyAuthTest` 3, `RateLimitTest` 1, `RequestValidationTest` +1, `AlibabaEnabledTest` +1, `RagEndpointTest` 3); E2E real `E2E_OLLAMA=true ./mvnw test -Dtest=OllamaE2EIT -DfailIfNoTests=false` → **3 testes, 0 falhas** contra Ollama real em container.
+
+**Não implementado (roadmap):** OIDC/JWT via Spring Security completo, guardrails dedicados (ex. NeMo), rate limit compartilhado entre instâncias, gestão do `spring-ai-alibaba` via BOM, output estruturado e cache semântico — permanecem como evolução futura documentada no README.
+

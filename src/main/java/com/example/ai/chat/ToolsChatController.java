@@ -1,6 +1,7 @@
 package com.example.ai.chat;
 
 import com.example.ai.api.ChatRequest;
+import com.example.ai.security.PromptGuard;
 import com.example.ai.tools.DateTimeTools;
 import com.example.ai.tools.MathTools;
 import jakarta.validation.Valid;
@@ -11,9 +12,11 @@ import org.springframework.web.bind.annotation.*;
 public class ToolsChatController {
 
     private final ChatClient chatClient;
+    private final PromptGuard promptGuard;
 
-    public ToolsChatController(ChatClient.Builder builder) {
+    public ToolsChatController(ChatClient.Builder builder, PromptGuard promptGuard) {
         this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
+        this.promptGuard = promptGuard;
     }
 
     @GetMapping("/ai/chat/tools")
@@ -27,6 +30,7 @@ public class ToolsChatController {
     }
 
     private String callWithTools(String message) {
+        promptGuard.validate(message);
         return chatClient.prompt()
                 .tools(new DateTimeTools(), new MathTools())
                 .user(message)

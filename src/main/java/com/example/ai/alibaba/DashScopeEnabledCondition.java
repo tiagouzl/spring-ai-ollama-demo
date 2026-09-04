@@ -19,9 +19,17 @@ public class DashScopeEnabledCondition implements Condition {
 
     static final String KEY = "spring.ai.dashscope.api-key";
 
+    /**
+     * Single source of truth for "is DashScope enabled?": a non-blank API key.
+     * Used both by the {@link Condition} evaluation and by the runtime check in
+     * {@code AlibabaChatController} so the rule never drifts between the two.
+     */
+    static boolean isEnabled(String apiKey) {
+        return apiKey != null && !apiKey.isBlank();
+    }
+
     @Override
     public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-        String apiKey = context.getEnvironment().getProperty(KEY);
-        return apiKey != null && !apiKey.isBlank();
+        return isEnabled(context.getEnvironment().getProperty(KEY));
     }
 }

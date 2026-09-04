@@ -66,6 +66,29 @@ server:
 app:
   rag:
     persistence-path: ./data/vector-store.json
+    # Minimum cosine similarity (0..1) for a chunk to be used as RAG context.
+    # Below this, the query is answered without retrieval instead of forcing
+    # irrelevant context into the prompt (avoids hallucinated answers).
+    similarity-threshold: 0.5
+  cors:
+    # Comma-separated list of origins allowed to call /ai/** from a browser
+    # (default * = any origin, fine for a public demo; narrow it in production).
+    allowed-origins: "*"
+  auth:
+    # When set, all /ai/** endpoints require an X-API-Key header with this value
+    # (401 otherwise). Empty (default) = endpoints stay open, ideal for local
+    # demos. For production, consider a full Spring Security/OIDC setup instead.
+    api-key: ${APP_API_KEY:}
+  rate-limit:
+    # Max requests per minute per client (X-API-Key header when present, else IP
+    # address) on /ai/** endpoints. <= 0 disables. In-memory only — use a shared
+    # store (e.g. Redis/Bucket4j) for multi-instance deployments.
+    requests-per-minute: 60
+  prompt-guard:
+    # Comma-separated, case-insensitive phrases rejected with 400 before the
+    # message reaches the model (heuristic prompt-injection protection — not a
+    # substitute for a real guardrails layer).
+    blocked-phrases: ignore previous instructions, ignore all previous instructions, ignore the system prompt, disregard all previous instructions, you are now, new system prompt
 
 # Observability: health/metrics + Prometheus scrape endpoint.
 # Spring AI's chat observations (spring.ai.*) are exported automatically
