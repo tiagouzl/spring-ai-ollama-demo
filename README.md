@@ -46,7 +46,7 @@ This project is a clean reference for building AI-agent / LLM applications on th
 | AI SDK    | Spring AI 1.0.1 + Spring AI Alibaba 1.0.0.4   |
 | Model (local) | Ollama — `granite4.1:3b` + `nomic-embed-text` |
 | Model (cloud) | Alibaba DashScope — `qwen-plus` (optional) |
-| Vector Store | `SimpleVectorStore` (in-memory, no DB)      |
+| Vector Store | `SimpleVectorStore` (in-memory, no DB; embeddings persisted to `./data`) |
 | Build     | Maven 3.9                                     |
 
 ---
@@ -188,7 +188,7 @@ Instead of returning the model's raw text, the reply is parsed into a typed `Top
 
 #### `/ai/rag` — Retrieval-Augmented Generation (RAG)
 
-Answers are grounded in local documents under [`src/main/resources/docs/`](src/main/resources/docs/) (`spring-ai-overview.txt`, `rag-pattern.txt`, `ollama-local.txt`). Documents are split into token-based chunks (`TokenTextSplitter`) so retrieval returns focused passages that fit the local model's context window, embedded via `nomic-embed-text` and stored in an in-memory `SimpleVectorStore` (**demo-only, resets on restart** — see Roadmap for production evolution); at query time the top-2 similar chunks are injected into the prompt. Only chunks above `app.rag.similarity-threshold` (default `0.5`, cosine) are used — below it the question is answered without retrieval instead of forcing irrelevant context (which would cause hallucinated answers).
+Answers are grounded in local documents under [`src/main/resources/docs/`](src/main/resources/docs/) (`spring-ai-overview.txt`, `rag-pattern.txt`, `ollama-local.txt`). Documents are split into token-based chunks (`TokenTextSplitter`) so retrieval returns focused passages that fit the local model's context window, embedded via `nomic-embed-text` and stored in a `SimpleVectorStore` that persists computed embeddings to `./data/vector-store.json` and reloads them on startup (**demo-grade — no external vector DB at query time**; see Roadmap for the pgvector path); at query time the top-2 similar chunks are injected into the prompt. Only chunks above `app.rag.similarity-threshold` (default `0.5`, cosine) are used — below it the question is answered without retrieval instead of forcing irrelevant context (which would cause hallucinated answers).
 
 ```bash
 # GET — grounded answer
@@ -283,102 +283,88 @@ src/main/
 │   │   ├── ChatRequest.java        # POST body for /ai/chat, /ai/chat/tools, /ai/alibaba/chat
 │   │   ├── MemoryChatRequest.java  # POST body for /ai/chat/memory
 │   │   ├── RagRequest.java         # POST body for /ai/rag
-│   │   └── ApiError.java           # Structured error response for GlobalExceptionHandler
+│   │   ├── TopicSentiment.java     # Typed output record for /ai/chat/structured
+│   │   ├── RagDebugDocument.java   # DTO for /ai/rag/debug (no internal Spring AI types)
+│   │   └── ApiError.java           # Structured error response (handler + security interceptors)
 │   ├── chat/
-│   │   ├── SimpleChatController.java   # GET/POST /ai/chat
+│   │   ├── SimpleChatController.java   # GET/POST /ai/chat (semantic cache)
 │   │   ├── StreamChatController.java   # GET/POST /ai/chat/stream (SSE)
 │   │   ├── MemoryChatController.java   # GET/POST /ai/session + /ai/chat/memory
-│   │   └── ToolsChatController.java    # GET/POST /ai/chat/tools
+│   │   ├── ToolsChatController.java    # GET/POST /ai/chat/tools
+│   │   └── StructuredChatController.java  # GET/POST /ai/chat/structured (typed output)
 │   ├── rag/
-│   │   ├── RagController.java      # GET/POST /ai/rag + /ai/rag/debug
-│   │   ├── RagConfig.java          # SimpleVectorStore (ollamaEmbeddingModel) + ingestion
-│   │   └── RagService.java         # Manual RAG (topK=2) — throws on error (no HTTP 200 swallow)
+│   │   ├── RagController.java      # GET/POST /ai/rag + /ai/rag/debug (sanitized 503)
+│   │   ├── RagConfig.java          # SimpleVectorStore + chunked ingestion + persistence
+│   │   └── RagService.java         # topK=2 + similarity threshold + debug DTO
+│   ├── cache/
+│   │   └── SemanticCache.java      # Opt-in semantic cache (embedding similarity, TTL)
+│   ├── security/
+│   │   ├── ApiKeyAuthInterceptor.java  # Optional X-API-Key guard (401)
+│   │   ├── RateLimitInterceptor.java   # Per-client fixed window (429)
+│   │   ├── PromptGuard.java            # Prompt-injection blocklist (400)
+│   │   ├── ApiSecurityConfig.java      # Registers the interceptors on /ai/**
+│   │   └── ApiErrorWriter.java         # ApiError JSON for interceptor responses
 │   ├── tools/
 │   │   ├── DateTimeTools.java      # @Tool — current date/time
 │   │   └── MathTools.java          # @Tool — arithmetic
 │   ├── alibaba/
-│   │   ├── DashScopeEnabledCondition.java  # Single source of truth for isDashScopeEnabled (dummy check)
-│   │   ├── DashScopeManualConfig.java      # Creates DashScopeChatModel when DASHSCOPE_API_KEY != dummy
-│   │   └── AlibabaChatController.java      # GET/POST /ai/alibaba/chat + /ai/alibaba/status (fallback)
+│   │   ├── DashScopeEnabledCondition.java  # Single source of truth (non-blank api-key)
+│   │   ├── DashScopeManualConfig.java      # Creates DashScopeChatModel when a key is present
+│   │   └── AlibabaChatController.java      # /ai/alibaba/chat (502 on failure) + /ai/alibaba/status
 │   └── config/
-│       ├── PrimaryChatClientConfig.java  # @Primary ChatClient.Builder for Ollama (fixes 2-model conflict)
-│       ├── ChatMemoryConfig.java         # ChatMemory bean (shared across memory controllers)
-│       └── GlobalExceptionHandler.java   # Structured JSON errors (ApiError) for timeout/model failures
+│       ├── PrimaryChatClientConfig.java  # @Primary ChatClient.Builder for Ollama (2-model fix)
+│       ├── ChatMemoryConfig.java         # JdbcChatMemoryRepository (file-based HSQLDB)
+│       ├── OllamaClientConfig.java       # Explicit HTTP timeouts (10s connect / 120s sync / 180s stream)
+│       ├── CorsConfig.java               # Global CORS for /ai/**
+│       └── GlobalExceptionHandler.java   # Structured ApiError (400/406/500/504)
 └── resources/
-    ├── application.yml             # Ollama + DashScope + vector store config (no dead properties)
+    ├── application.yml             # Ollama + DashScope + persistence + security + cache
     └── docs/
         ├── spring-ai-overview.txt  # RAG source doc
         ├── rag-pattern.txt         # RAG source doc
         └── ollama-local.txt        # RAG source doc
 ```
 
-### ChatController
+### Controller overview
+
+The original monolithic `ChatController` was split into focused controllers (see the tree above); every endpoint supports `GET` (query params) and `POST` (validated JSON body). A representative example — the simple chat controller with the semantic cache:
 
 ```java
 @RestController
-public class ChatController {
+public class SimpleChatController {
 
     private final ChatClient chatClient;
-    private final ChatMemory chatMemory;
+    private final PromptGuard promptGuard;
+    private final SemanticCache semanticCache;
 
-    public ChatController(ChatClient.Builder builder) {
-        this.chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
+    public SimpleChatController(ChatClient.Builder builder, PromptGuard promptGuard, SemanticCache semanticCache) {
         this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
+        this.promptGuard = promptGuard;
+        this.semanticCache = semanticCache;
     }
 
-    // Stateless single reply
     @GetMapping("/ai/chat")
-    public String chat(@RequestParam(value = "message", defaultValue = "What is Spring AI?") String message) {
-        return chatClient.prompt(message).call().content();
+    public String chatGet(@RequestParam(value = "message", defaultValue = "What is Spring AI?") String message) {
+        return answer(message);
     }
 
-    // Streaming response (SSE)
-    @GetMapping("/ai/chat/stream")
-    public Flux<String> chatStream(@RequestParam(value = "message", defaultValue = "Tell a short joke") String message) {
-        return chatClient.prompt(message).stream().content();
+    @PostMapping("/ai/chat")
+    public String chatPost(@Valid @RequestBody ChatRequest request) {
+        return answer(request.message());
     }
 
-    // Multi-turn with per-conversation memory
-    @GetMapping("/ai/chat/memory")
-    public String chatMemory(@RequestParam("sessionId") String sessionId,
-                             @RequestParam("message") String message) {
-        var memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory)
-                .conversationId(sessionId)
-                .build();
-        return chatClient.prompt().advisors(memoryAdvisor).user(message).call().content();
-    }
-
-    // Function calling — model can invoke Java @Tool methods
-    @GetMapping("/ai/chat/tools")
-    public String chatWithTools(@RequestParam(value = "message",
-            defaultValue = "What is the current date and time? Also, what is 15% of 200?") String message) {
-        return chatClient.prompt()
-                .tools(new DateTimeTools(), new MathTools())
-                .user(message)
-                .call()
-                .content();
-    }
-
-    // RAG — grounded answer from docs/resources/docs/ (returns 503 if embedding/LLM unavailable)
-    @GetMapping("/ai/rag")
-    public ResponseEntity<String> rag(@RequestParam(value = "question", defaultValue = "What is Spring AI and how does RAG work?") String question) {
-        try {
-            return ResponseEntity.ok(ragService.answer(question));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body("RAG error: " + e.getMessage());
-        }
-    }
-
-    // RAG debug — retrieved chunks without LLM
-    @GetMapping("/ai/rag/debug")
-    public List<Document> ragDebug(@RequestParam(value = "question", defaultValue = "What is RAG?") String question) {
-        return ragService.debugSearch(question);
+    private String answer(String message) {
+        promptGuard.validate(message);
+        return semanticCache.lookup(message).orElseGet(() -> {
+            String content = chatClient.prompt(message).call().content();
+            semanticCache.store(message, content);
+            return content;
+        });
     }
 }
 ```
 
-The **`ChatClient`** is auto-configured by the Spring AI starter — one dependency and a couple of properties is all it takes. Memory is handled by **`MessageChatMemoryAdvisor`**, which stores and injects the recent conversation history automatically per `conversationId`.
+The **`ChatClient`** is auto-configured by the Spring AI starter — one dependency and a couple of properties is all it takes. Multi-turn memory is handled by **`MessageChatMemoryAdvisor`** with a `JdbcChatMemoryRepository` backend. Errors never reach the client raw: `GlobalExceptionHandler` returns structured `ApiError` JSON, and the auth/rate-limit interceptors short-circuit with 401/429 before the controller.
 
 ---
 
@@ -390,7 +376,7 @@ Defined in [`src/main/resources/application.yml`](src/main/resources/application
 spring:
   ai:
     model:
-      chat: ollama        # ollama | dashscope (both have matchIfMissing=true, must pick one)
+      chat: ollama          # ollama (primary) | dashscope — must pick one
       embedding: ollama
     ollama:
       base-url: http://localhost:11434
@@ -402,11 +388,25 @@ spring:
         options:
           model: nomic-embed-text
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY:dummy}  # dummy allows startup without key; /ai/alibaba/* falls back
+      api-key: ${DASHSCOPE_API_KEY:}  # unset = DashScope disabled; /ai/alibaba/* falls back to Ollama
       chat:
         options:
           model: qwen-plus
           temperature: 0.7
+
+# app.* tuning — security, RAG, cache (see table below)
+app:
+  rag:
+    similarity-threshold: 0.5
+  cors:
+    allowed-origins: "*"
+  auth:
+    api-key: ${APP_API_KEY:}
+  rate-limit:
+    requests-per-minute: 60
+  cache:
+    semantic:
+      enabled: false
 ```
 
 | Property                          | Description                         |
@@ -417,7 +417,7 @@ spring:
 | `spring.ai.ollama.embedding.options.model` | Embedding model for RAG |
 | `spring.ai.model.chat` | `ollama` (primary) — must pick one due to DashScope/Ollama both `matchIfMissing=true` |
 | `spring.ai.model.embedding` | `ollama` (primary) |
-| `spring.ai.dashscope.api-key` | DashScope API key (`DASHSCOPE_API_KEY`, `dummy` allows CI) |
+| `spring.ai.dashscope.api-key` | DashScope API key (`DASHSCOPE_API_KEY`; empty = DashScope disabled, `/ai/alibaba/*` falls back to Ollama) |
 | `spring.ai.dashscope.chat.options.model` | DashScope model (`qwen-plus`) |
 | `app.rag.similarity-threshold` | Min cosine similarity for a chunk to be used as RAG context (default `0.5`; below it the answer comes without retrieval) |
 | `app.cors.allowed-origins` | Comma-separated origins allowed to call `/ai/**` from a browser (default `*` = any; narrow for production) |
@@ -451,7 +451,7 @@ This is a clean base. Natural next steps (see the Spring AI Alibaba Agent Framew
 
 ### Production RAG: SimpleVectorStore → pgvector
 
-`SimpleVectorStore` is in-memory and **resets on restart** (demo only). For production:
+`SimpleVectorStore` is in-memory at runtime with embeddings persisted to `./data/vector-store.json` and reloaded on startup — fine for a single instance/demo, but there is no external vector DB for query-time scale or multi-instance sharing. For production:
 
 ```yaml
 # 1. Add dependency (Spring AI PGVector starter)
@@ -476,8 +476,8 @@ Then swap `SimpleVectorStore` bean in `RagConfig` for `PgVectorStore` (auto-conf
 
 ### CI / Testing
 
-- `./mvnw test` (Maven Wrapper included — no local Maven install needed) runs 12 integration tests (Spring Boot + mocked models in CI)
-- All controllers covered: simple chat, streaming, memory, tools, RAG, Alibaba fallback, request validation, persistent memory, observability
+- `./mvnw test` (Maven Wrapper included — no local Maven install needed) runs 27 integration tests (Spring Boot + mocked models in CI)
+- All controllers covered: simple chat, streaming, memory, tools, structured output, RAG (+ debug DTO and sanitized 503), Alibaba fallback + 502, request validation + prompt guard, persistent memory, observability, API-key auth, rate limiting, semantic cache, OpenAPI docs
 - GitHub Actions: `.github/workflows/ci.yml` runs on PR + push to `main`
 
 ### Observability
@@ -534,7 +534,7 @@ E2E_OLLAMA=true ./mvnw test -Dtest=OllamaE2EIT -DfailIfNoTests=false
        └─────────────┘
 ```
 
-Error handling: `GlobalExceptionHandler` returns JSON `ApiError` for all exceptions (timeout → 504, bad request → 400, internal → 500).
+Error handling: `GlobalExceptionHandler` returns JSON `ApiError` (validation → 400, not acceptable → 406, timeout → 504, internal → 500); the security interceptors return 401/429, and DashScope/RAG failures surface as 502/503 — nothing is masked as a fake 200.
 
 ---
 

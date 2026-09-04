@@ -1,6 +1,6 @@
 # 📊 Análise do Projeto: `spring-ai-ollama-demo`
 
-> Relatório de análise técnica gerado em 01/09/2026 — commit `1a49fad` (branch `main`).
+> Relatório de análise técnica gerado em 01/09/2026 — commit `1a49fad` (branch `main`). Estendido em 04/09/2026 até o commit `23a84da` com as rodadas 9-11 (segurança, RAG, Docker/OpenAPI/output estruturado, cache semântico e BOM Alibaba).
 
 ## 1. Visão Geral
 
@@ -24,41 +24,54 @@ Projeto de demonstração **Spring Boot 3.4.5 + Spring AI 1.0.1** que integra LL
 com.example.ai
 ├── DemoApplication          → @SpringBootApplication padrão
 ├── config/
-│   ├── ChatMemoryConfig     → MessageWindowChatMemory (janela de 20 msgs)
-│   ├── PrimaryChatClientConfig → resolve conflito de 2 ChatModels (@Primary Ollama)
-│   └── GlobalExceptionHandler  → @RestControllerAdvice com ApiError estruturado
+│   ├── ChatMemoryConfig         → ChatMemory persistente (JdbcChatMemoryRepository/HSQLDB, janela de 20 msgs)
+│   ├── PrimaryChatClientConfig  → resolve conflito de 2 ChatModels (@Primary Ollama)
+│   ├── OllamaClientConfig       → OllamaApi com timeouts HTTP explícitos (10s/120s/180s)
+│   ├── CorsConfig               → CORS global para /ai/** (app.cors.allowed-origins)
+│   └── GlobalExceptionHandler   → @RestControllerAdvice com ApiError estruturado
 ├── chat/
-│   ├── SimpleChatController  → GET/POST /ai/chat (síncrono)
-│   ├── StreamChatController  → GET/POST /ai/chat/stream (SSE, Flux<String>)
-│   ├── MemoryChatController  → /ai/chat/memory + /ai/session (memória por sessionId)
-│   └── ToolsChatController   → /ai/chat/tools (function calling)
+│   ├── SimpleChatController       → GET/POST /ai/chat (prompt guard + cache semântico)
+│   ├── StreamChatController       → GET/POST /ai/chat/stream (SSE, Flux<String>)
+│   ├── MemoryChatController       → /ai/chat/memory + /ai/session (memória por sessionId)
+│   ├── ToolsChatController        → /ai/chat/tools (function calling)
+│   └── StructuredChatController   → /ai/chat/structured (output tipado via ChatClient.entity)
+├── cache/
+│   └── SemanticCache           → cache semântico opt-in e fail-safe (similaridade por cosseno, TTL)
 ├── tools/ (DateTimeTools, MathTools) → @Tool anotados
 ├── rag/
-│   ├── RagConfig            → SimpleVectorStore + ingestão de 3 docs locais
-│   ├── RagService           → retrieval manual (topK=2) + prompt grounded
-│   └── RagController        → /ai/rag e /ai/rag/debug (GET/POST)
+│   ├── RagConfig            → SimpleVectorStore + TokenTextSplitter + persistência em disco
+│   ├── RagService           → retrieval manual (topK=2, threshold de similaridade) + DTO debug
+│   └── RagController        → /ai/rag e /ai/rag/debug (GET/POST, 503 sanitizado)
 ├── alibaba/
-│   ├── DashScopeEnabledCondition → Condition: key real ≠ "dummy"
-│   ├── DashScopeManualConfig     → cria DashScopeChatModel condicionalmente
-│   └── AlibabaChatController     → /ai/alibaba/chat e /ai/alibaba/status com fallback
-└── api/ (records: ChatRequest, MemoryChatRequest, RagRequest, ApiError)
+│   ├── DashScopeEnabledCondition → fonte única de verdade (api-key não-vazia)
+│   ├── DashScopeManualConfig     → cria DashScopeChatModel só quando a key está setada
+│   └── AlibabaChatController     → /ai/alibaba/chat e /ai/alibaba/status (falha real → 502, não mascarada)
+├── security/
+│   ├── ApiKeyAuthInterceptor  → auth opt-in X-API-Key (401)
+│   ├── RateLimitInterceptor   → rate limit janela fixa por cliente (429)
+│   ├── PromptGuard            → blocklist de prompt injection (400)
+│   ├── ApiSecurityConfig      → registra os interceptors em /ai/**
+│   └── ApiErrorWriter         → escreve ApiError JSON a partir dos interceptors
+└── api/ (records: ChatRequest, MemoryChatRequest, RagRequest, TopicSentiment, RagDebugDocument, ApiError)
 ```
 
-**Endpoints:** `/ai/chat`, `/ai/chat/stream`, `/ai/chat/memory`, `/ai/chat/tools`, `/ai/rag`, `/ai/rag/debug`, `/ai/alibaba/chat`, `/ai/alibaba/status` — todos com GET + POST.
+**Endpoints:** `/ai/chat`, `/ai/chat/stream`, `/ai/chat/memory`, `/ai/chat/tools`, `/ai/chat/structured`, `/ai/rag`, `/ai/rag/debug`, `/ai/alibaba/chat`, `/ai/alibaba/status` — chat/RAG/structured com GET + POST; `/ai/session` e `/ai/alibaba/status` são GET-only. OpenAPI em `/v3/api-docs` + UI em `/swagger-ui.html`.
 
 ## 3. Pontos Fortes ✅
 
 1. **Resolução elegante de conflito de beans** — O ponto mais sofisticado do projeto. Quando `DASHSCOPE_API_KEY` está setada, existem 2 `ChatModel`s e o `ChatClientAutoConfiguration` falharia com `NoUniqueBeanDefinitionException`. O `PrimaryChatClientConfig` resolve isso com um `@Primary ChatClient.Builder` amarrado ao `ollamaChatModel`, fazendo o auto-config recuar (`@ConditionalOnMissingBean`). Bem documentado em Javadoc.
 
-2. **Condição única de verdade** (`DashScopeEnabledCondition`) — centraliza a lógica "DashScope está habilitado?" e é sincronizada com o dummy `"dummy"` no `application.yml`. O fallback do controller é progressivo: sem key → mensagem instrutiva + resposta Ollama; bean ausente → fallback; erro de API → fallback.
+2. **Condição única de verdade** (`DashScopeEnabledCondition`) — centraliza a lógica "DashScope está habilitado?" (api-key não-vazia, sem sentinela) e o controller delega para `isEnabled(apiKey)`. O fallback do controller é progressivo: sem key → mensagem instrutiva + resposta Ollama; bean ausente → 503; erro de API → 502 (sem mascarar em 200).
 
 3. **Robustez para CI/local sem Ollama** — `RagConfig` faz a ingestão dentro de try/catch para não derrubar o boot; `RagController` retorna 503 com dica (`ollama pull nomic-embed-text`).
 
-4. **Cobertura de testes direcionada** — 2 testes de integração (`@SpringBootTest` RANDOM_PORT) que travam os comportamentos críticos: fallback com key dummy e coexistência dos 2 modelos com mocks. **Build validado: 5 testes, 0 falhas, BUILD SUCCESS (22,6s).**
+4. **Cobertura de testes direcionada** — 2 testes de integração (`@SpringBootTest` RANDOM_PORT) que travam os comportamentos críticos: fallback com key dummy e coexistência dos 2 modelos com mocks. **Build validado: 5 testes, 0 falhas, BUILD SUCCESS (22,6s).** *(Valores da análise original — a suíte atual tem 27 testes, ver §9-11.)*
 
 5. **Qualidade de API** — records imutáveis, `GlobalExceptionHandler` mapeando `IllegalArgument`→400, `Timeout`→504, genérico→500; streaming com `Flux<String>`/SSE; README completo com badges, roadmap e tabelas de configuração.
 
 ## 4. Pontos de Atenção / Melhorias ⚠️
+
+> **Nota:** itens históricos da análise original — todos foram endereçados nas rodadas 7-11 (ver seções correspondentes).
 
 1. **Fragilidade do "dummy" por convenção** — O valor `"dummy"` está replicado em 3 lugares (`application.yml`, `DashScopeEnabledCondition.DUMMY`, comentários). Se alguém setar `DASHSCOPE_API_KEY=dummy` de verdade, o sistema silenciosamente usa fallback. Alternativa: ausência da variável (sem default dummy) + `@ConditionalOnProperty` ou perfil Spring.
 
@@ -70,7 +83,7 @@ com.example.ai
    - `GlobalExceptionHandler` retorna `ex.getMessage()` bruto ao cliente (pode vazar stack/internals);
    - Não há validação (`@Valid`/`@NotBlank`) nos requests;
    - Endpoints sem autenticação/rate-limit (o próprio README lista isso no roadmap);
-   - `ChatMemory` e `SimpleVectorStore` são **in-memory** — reinício perde tudo (aceitável para demo, documentar).
+   - `ChatMemory` e `SimpleVectorStore` eram **in-memory** (reinício perdia tudo) — desde a rodada 8 ambos persistem em `./data/` (HSQLDB + JSON).
 
 5. **Dependência não gerenciada** — `spring-ai-alibaba-starter-dashscope` tem versão fixada fora do BOM do Spring AI; vale checar compatibilidade 1.0.0.4 × Spring AI 1.0.1 (aparentemente ok, pois os testes passam).
 
@@ -162,9 +175,9 @@ Rodada de correções baseada na revisão cruzada de duas análises externas do 
 
 1. **Output estruturado** — novo endpoint `/ai/chat/structured` (GET/POST): a resposta do LLM é parseada no record tipado `TopicSentiment(topic, sentiment, rating)` via `ChatClient.call().entity(Class)` (JSON Schema gerado automaticamente pelo Spring AI). É o padrão para APIs tipadas em cima de LLMs.
 
-2. **OpenAPI/Swagger** — adicionado `springdoc-openapi-starter-webmvc-ui` 2.8.17 (compatível com Boot 3.4): spec em `/v3/api-docs` e UI interativa em `/swagger-ui.html`, gerados automaticamente dos controllers. Fora do escopo do guard `/ai/**`, então docs ficam públicas.
+2. **OpenAPI/Swagger** — adicionado `springdoc-openapi-starter-webmvc-ui` **2.8.14** (pinned: 2.8.15+ quebra o startup no Boot 3.4.x com "Invalid mapping pattern detected: /swagger-ui/**/*swagger-initializer.js" — springdoc#3210): spec em `/v3/api-docs` e UI interativa em `/swagger-ui.html`, gerados automaticamente dos controllers. Fora do escopo do guard `/ai/**`, então docs ficam públicas.
 
-3. **Docker Compose** — novo `Dockerfile` multi-stage (build Maven → runtime Temurin 21 JRE, jar final ~) e `docker-compose.yml` com três serviços: `ollama` (healthcheck), `ollama-pull` (baixa `granite4.1:3b` + `nomic-embed-text` uma vez, `service_completed_successfully` como gate) e `app` (aponta para `http://ollama:11434` via `SPRING_AI_OLLAMA_BASEURL`, monta `./data:/app/data` para persistir memória/vector store, `APP_API_KEY` opcional). `.dockerignore` exclui `target/`, `.git/`, `data/`.
+3. **Docker Compose** — novo `Dockerfile` multi-stage (build Maven → runtime Temurin 21 JRE, jar final enxuto) e `docker-compose.yml` com três serviços: `ollama` (healthcheck), `ollama-pull` (baixa `granite4.1:3b` + `nomic-embed-text` uma vez, `service_completed_successfully` como gate) e `app` (aponta para `http://ollama:11434` via `SPRING_AI_OLLAMA_BASEURL`, monta `./data:/app/data` para persistir memória/vector store, `APP_API_KEY` opcional). `.dockerignore` exclui `target/`, `.git/`, `data/`.
 
 **Validação:** suíte completa `./mvnw test` → **25 testes, 0 falhas** (novos: `StructuredChatTest` 2, `OpenApiDocsTest` 2); `docker compose config` validado.
 
