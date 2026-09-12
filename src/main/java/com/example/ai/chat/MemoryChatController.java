@@ -19,7 +19,7 @@ public class MemoryChatController {
 
     public MemoryChatController(ChatClient.Builder builder, ChatMemory chatMemory, PromptGuard promptGuard) {
         this.chatMemory = chatMemory;
-        this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
+        this.chatClient = builder.defaultSystem(ChatPrompts.DEFAULT).build();
         this.promptGuard = promptGuard;
     }
 

@@ -15,7 +15,7 @@ public class StreamChatController {
     private final PromptGuard promptGuard;
 
     public StreamChatController(ChatClient.Builder builder, PromptGuard promptGuard) {
-        this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
+        this.chatClient = builder.defaultSystem(ChatPrompts.DEFAULT).build();
         this.promptGuard = promptGuard;
     }
 

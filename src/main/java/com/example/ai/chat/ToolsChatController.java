@@ -15,7 +15,7 @@ public class ToolsChatController {
     private final PromptGuard promptGuard;
 
     public ToolsChatController(ChatClient.Builder builder, PromptGuard promptGuard) {
-        this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
+        this.chatClient = builder.defaultSystem(ChatPrompts.DEFAULT).build();
         this.promptGuard = promptGuard;
     }
 

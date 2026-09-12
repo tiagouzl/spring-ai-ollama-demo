@@ -15,7 +15,7 @@ public class SimpleChatController {
     private final SemanticCache semanticCache;
 
     public SimpleChatController(ChatClient.Builder builder, PromptGuard promptGuard, SemanticCache semanticCache) {
-        this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
+        this.chatClient = builder.defaultSystem(ChatPrompts.DEFAULT).build();
         this.promptGuard = promptGuard;
         this.semanticCache = semanticCache;
     }
