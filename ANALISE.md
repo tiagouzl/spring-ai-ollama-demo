@@ -195,3 +195,23 @@ Rodada de correções baseada na revisão cruzada de duas análises externas do 
 
 **Não implementado (roadmap):** agentes Spring AI Alibaba (Agent+Skill), OIDC/JWT via Spring Security completo, guardrails dedicados e rate limit compartilhado entre instâncias — documentados no README.
 
+
+
+---
+
+## 12. Correção do Cache Semântico e Verificação do Threshold RAG (12/09/2026)
+
+Revisão de código do estado atual (commit pós-rodada 11). Dois pontos foram investigados; um era bug real e foi corrigido, o outro era suspeita e foi **descartado** após verificação.
+
+1. **Bug real no `SemanticCache` — chave textual em vez de id opaco.** O cache usava o **texto da mensagem** como chave do `ConcurrentHashMap`, mas a busca é por similaridade de cosseno sobre os embeddings. Consequência: perguntas semanticamente equivalentes com frases diferentes ("Qual a capital da França?" vs. "Me diz a capital francesa") ocupavam **slots distintos** e nunca compartilhavam um hit — o cache crescia com duplicatas semânticas até o teto `max-entries`. Correção: chave passa a ser um **id sequencial** (`AtomicLong`), coerente com a semântica do cache; a comparação por cosseno permanece no `lookup`.
+
+2. **Bug secundário descoberto durante a correção — tie-break no `lookup`.** Com dois embeddings idênticos (cosseno 1.0 para ambos), o loop usava `if (similarity > best)` estrito: a **primeira** entrada definia `best = 1.0` e nenhuma outra com `1.0` conseguia superá-la. Resultado: em empate, a resposta mais **antiga** vencia e ficava congelada (o consumidor nunca reescrevia, pois o `lookup` acertava). Correção: empates agora são desempatados pelo `createdAt` mais recente — a resposta mais atual vence.
+
+3. **Evicção de expirados na leitura.** Entradas com TTL vencido eram apenas *puladas* no `lookup`, removidas só quando `store` cruzava `max-entries`. Agora são removidas a cada `lookup` (`removeIf`), evitando retenção de respostas obsoletas em instâncias ociosas.
+
+4. **Semântica do `similarity-threshold` do RAG — verificada, suspeita descartada.** Havia a hipótese de que o score do `SimpleVectorStore` fosse *distância* (e não *similaridade*), o que inverteria o significado do `app.rag.similarity-threshold: 0.5`. Verificação feita em duas frentes:
+   - **Bytecode** (jar `spring-ai-vector-store-1.0.1`): `doSimilaritySearch` calcula `EmbeddingMath.cosineSimilarity(query, doc)` e filtra por `score >= similarityThreshold` (`lambda$doSimilaritySearch$1`), ordenando por score decrescente. Portanto: **cosseno** (faixa [-1, 1], 1.0 = idêntico) e threshold = **similaridade mínima**. O comentário do `application.yml` está correto.
+   - **Empírico** (`nomic-embed-text` via API do Ollama, docs reais): perguntas relevantes → cosseno **0.70–0.77**; irrelevantes → **0.30–0.39**. O threshold 0.5 separa limpo, com folga em ambos os lados. Nada a corrigir.
+   - *Nota para o futuro:* outros vector stores do Spring AI (ex. pgvector) usam **distância** e threshold "≤ distância máxima" — daí a confusão possível. No `SimpleVectorStore` a semântica é a inversa.
+
+**Validação:** suíte completa `./mvnw test` → **31 testes, 0 falhas** (novo: `SemanticCacheUnitTest` 4, unitário sem Spring, cobrindo chave opaca, tie-break e ausência de dependência do texto). Os 27 testes anteriores seguem verdes.

@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +21,7 @@ class OpenApiDocsTest {
     @Autowired
     private TestRestTemplate rest;
 
-    @MockBean
+    @MockitoBean
     private OllamaChatModel ollamaChatModel;
 
     @Test

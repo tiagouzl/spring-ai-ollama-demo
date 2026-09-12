@@ -26,6 +26,9 @@ public class AlibabaChatController {
     private final ObjectProvider<DashScopeChatModel> dashScopeProvider;
     private final String dashScopeApiKey;
     private final PromptGuard promptGuard;
+    // Built once at startup when the DashScope model bean exists; null otherwise
+    // (api-key absent -> DashScopeManualConfig does not create the bean).
+    private final ChatClient dashScopeChatClient;
 
     public AlibabaChatController(ChatClient.Builder ollamaBuilder,
                                  ObjectProvider<DashScopeChatModel> dashScopeProvider,
@@ -36,6 +39,8 @@ public class AlibabaChatController {
         this.dashScopeProvider = dashScopeProvider;
         this.dashScopeApiKey = dashScopeApiKey;
         this.promptGuard = promptGuard;
+        DashScopeChatModel dashModel = dashScopeProvider.getIfAvailable();
+        this.dashScopeChatClient = dashModel == null ? null : ChatClient.builder(dashModel).build();
     }
 
     private boolean isDashScopeConfigured() {
@@ -65,8 +70,7 @@ public class AlibabaChatController {
 
                     """ + ollamaChatClient.prompt(message).call().content());
         }
-        DashScopeChatModel dashModel = dashScopeProvider.getIfAvailable();
-        if (dashModel == null) {
+        if (dashScopeChatClient == null) {
             // Key is set but the bean was not created — a real misconfiguration.
             // Surface it instead of silently serving Ollama under HTTP 200.
             log.warn("DashScope API key is set but the DashScopeChatModel bean is not available");
@@ -74,8 +78,7 @@ public class AlibabaChatController {
                     .body("DashScope is configured but the model bean is unavailable. Check the server logs — no silent fallback.");
         }
         try {
-            ChatClient dashClient = ChatClient.builder(dashModel).build();
-            return ResponseEntity.ok(dashClient.prompt(message).call().content());
+            return ResponseEntity.ok(dashScopeChatClient.prompt(message).call().content());
         } catch (Exception e) {
             // Do NOT mask the failure with a 200 + fallback text — APM/alerting must
             // see the error. Log the detail server-side; return a sanitized 502.

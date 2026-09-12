@@ -10,7 +10,7 @@ import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 
@@ -42,15 +42,15 @@ class SemanticCacheTest {
     @Autowired
     private TestRestTemplate rest;
 
-    @MockBean
+    @MockitoBean
     private OllamaChatModel ollamaChatModel;
 
-    @MockBean
+    @MockitoBean
     private EmbeddingModel embeddingModel;
 
     // Replaces the real VectorStore so the RAG startup ingestion never persists a
     // bogus vector store built from the mocked embeddings.
-    @MockBean
+    @MockitoBean
     private VectorStore vectorStore;
 
     private static ChatResponse mockedResponse(String content) {

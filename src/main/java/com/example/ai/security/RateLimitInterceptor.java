@@ -16,6 +16,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * the {@code X-API-Key} header when present, otherwise by IP address). Exceeding
  * the limit returns a structured 429.
  * <p>
+ * The window is <b>fixed and aligned to the wall clock</b> (00:00–00:59,
+ * 01:00–01:59, …), not sliding: a client can legitimately send the full quota
+ * right before a boundary and the full quota again right after, i.e. up to
+ * {@code 2 × requests-per-minute} requests in a very short burst. This is the
+ * classic fixed-window trade-off (cheap, no per-request bookkeeping) — switch to
+ * a sliding-window/token-bucket algorithm (e.g. Bucket4j) if that burst matters.
+ * </p>
+ * <p>
  * {@code <= 0} disables limiting. In-memory only — a production deployment behind
  * multiple instances should use a shared store (Redis/Bucket4j) instead.
  * </p>

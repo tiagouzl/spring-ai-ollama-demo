@@ -476,7 +476,7 @@ Then swap `SimpleVectorStore` bean in `RagConfig` for `PgVectorStore` (auto-conf
 
 ### CI / Testing
 
-- `./mvnw test` (Maven Wrapper included — no local Maven install needed) runs 27 integration tests (Spring Boot + mocked models in CI)
+- `./mvnw test` (Maven Wrapper included — no local Maven install needed) runs 31 integration tests (Spring Boot + mocked models in CI)
 - All controllers covered: simple chat, streaming, memory, tools, structured output, RAG (+ debug DTO and sanitized 503), Alibaba fallback + 502, request validation + prompt guard, persistent memory, observability, API-key auth, rate limiting, semantic cache, OpenAPI docs
 - GitHub Actions: `.github/workflows/ci.yml` runs on PR + push to `main`
 

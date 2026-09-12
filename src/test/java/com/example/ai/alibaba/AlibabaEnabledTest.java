@@ -8,7 +8,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
@@ -37,12 +37,12 @@ class AlibabaEnabledTest {
     @Autowired
     private TestRestTemplate rest;
 
-    @MockBean
+    @MockitoBean
     private OllamaChatModel ollamaChatModel;
 
     // DashScopeChatModel will be created by DashScopeManualConfig (api-key property is non-blank)
     // We mock its call as well to avoid needing a real DashScope API
-    @MockBean
+    @MockitoBean
     private com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel dashScopeChatModel;
 
     private static ChatResponse mockedResponse(String content) {

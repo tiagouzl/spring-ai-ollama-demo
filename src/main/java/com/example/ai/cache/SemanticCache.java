@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Small in-memory semantic cache for chat replies: before calling the model, the
@@ -21,8 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * Deliberately <b>fail-safe</b>: any embedding/connection error simply bypasses
  * the cache (logged at debug), so a cache problem can never break a chat request.
- * Entries expire after {@code ttl-seconds} and the cache is capped at
- * {@code max-entries} (lazy eviction on store). Per-instance only — a production
+ * Entries expire after {@code ttl-seconds}; expired entries are evicted both on
+ * read (so idle instances do not retain stale answers) and before a store that
+ * would exceed {@code max-entries}. Per-instance only — a production
  * deployment should use a shared store (e.g. Redis) for the same semantics.
  * </p>
  */
@@ -39,7 +41,12 @@ public class SemanticCache {
     private final double similarityThreshold;
     private final Duration ttl;
     private final int maxEntries;
-    private final Map<String, Entry> cache = new ConcurrentHashMap<>();
+    // Keys are opaque sequential ids, NOT the message text: lookups are by
+    // cosine similarity over the embeddings, so two semantically equivalent
+    // questions must share a slot and hit the same entry. Using the text as
+    // key would create one entry per phrasing and defeat the cache.
+    private final Map<Long, Entry> cache = new ConcurrentHashMap<>();
+    private final AtomicLong nextId = new AtomicLong();
 
     public SemanticCache(EmbeddingModel embeddingModel,
                          @Value("${app.cache.semantic.enabled:false}") boolean enabled,
@@ -64,15 +71,21 @@ public class SemanticCache {
         try {
             float[] query = embeddingModel.embed(message);
             long now = Instant.now().toEpochMilli();
+            // Drop expired entries eagerly on read so idle instances do not keep
+            // stale answers resident until the next store crosses max-entries.
+            cache.entrySet().removeIf(e -> now - e.getValue().createdAt().toEpochMilli() > ttl.toMillis());
             double best = -1.0;
+            Instant bestCreatedAt = Instant.MIN;
             String bestAnswer = null;
             for (Entry entry : cache.values()) {
-                if (now - entry.createdAt().toEpochMilli() > ttl.toMillis()) {
-                    continue; // expired — lazily skipped (removed on next store)
-                }
                 double similarity = cosine(query, entry.embedding());
-                if (similarity > best) {
+                // Strictly greater on similarity, but ties are broken by the
+                // most recent entry: two phrasings with identical embeddings
+                // are equally close, and the freshest answer should win.
+                if (similarity > best
+                        || (similarity == best && entry.createdAt().isAfter(bestCreatedAt))) {
                     best = similarity;
+                    bestCreatedAt = entry.createdAt();
                     bestAnswer = entry.answer();
                 }
             }
@@ -96,11 +109,17 @@ public class SemanticCache {
             if (cache.size() >= maxEntries) {
                 evict();
             }
-            cache.put(message, new Entry(embeddingModel.embed(message), answer, Instant.now()));
+            long id = nextId.incrementAndGet();
+            cache.put(id, new Entry(embeddingModel.embed(message), answer, Instant.now()));
             log.debug("[cache] stored answer ({} entries)", cache.size());
         } catch (Exception e) {
             log.debug("[cache] store failed, skipping: {}", e.getMessage());
         }
+    }
+
+    /** Visible for testing: number of live entries currently held. */
+    int size() {
+        return cache.size();
     }
 
     private void evict() {
