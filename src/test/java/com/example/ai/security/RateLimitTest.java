@@ -10,7 +10,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -52,5 +55,15 @@ class RateLimitTest {
         ResponseEntity<String> third = rest.getForEntity("/ai/chat?message=three", String.class);
         assertThat(third.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(third.getBody()).contains("Too many requests");
+    }
+
+    @Test
+    void optionsPreflightIsNotRateLimited() {
+        // Preflight (OPTIONS) carries no real load and no client identity, so it
+        // must never consume quota or be rejected with 429.
+        ResponseEntity<String> response = rest.exchange(
+                "/ai/chat?message=one", HttpMethod.OPTIONS,
+                new HttpEntity<>(new HttpHeaders()), String.class);
+        assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.TOO_MANY_REQUESTS);
     }
 }

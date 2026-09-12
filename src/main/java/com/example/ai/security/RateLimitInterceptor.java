@@ -11,60 +11,82 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Simple fixed-window rate limiter for the {@code /ai/**} endpoints: at most
- * {@code app.rate-limit.requests-per-minute} requests per client (identified by
- * the {@code X-API-Key} header when present, otherwise by IP address). Exceeding
- * the limit returns a structured 429.
+ * Simple per-client rate limiter for the {@code /ai/**} endpoints using a
+ * <b>token-bucket</b> algorithm: each client holds a bucket pre-filled with
+ * {@code requests-per-minute} tokens that refills continuously at that rate
+ * (i.e. {@code requests-per-minute} per 60&nbsp;s), with one token consumed per
+ * request.
  * <p>
- * The window is <b>fixed and aligned to the wall clock</b> (00:00–00:59,
- * 01:00–01:59, …), not sliding: a client can legitimately send the full quota
- * right before a boundary and the full quota again right after, i.e. up to
- * {@code 2 × requests-per-minute} requests in a very short burst. This is the
- * classic fixed-window trade-off (cheap, no per-request bookkeeping) — switch to
- * a sliding-window/token-bucket algorithm (e.g. Bucket4j) if that burst matters.
+ * Compared to the previous fixed-wall-clock-window limiter, this removes the
+ * classic boundary flaw: a client could previously send the full quota just
+ * before a window boundary and the full quota again just after — up to
+ * {@code 2 x requests-per-minute} in a very short burst. With a token bucket the
+ * throughput is smoothed and bounded by the steady refill rate.
  * </p>
  * <p>
- * {@code <= 0} disables limiting. In-memory only — a production deployment behind
- * multiple instances should use a shared store (Redis/Bucket4j) instead.
+ * {@code <= 0} disables limiting. In-memory only — a production deployment
+ * behind multiple instances should back this with a shared store
+ * (e.g. Redis/Bucket4j) instead, so the buckets are shared across replicas.
  * </p>
  */
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
 
-    private static final long WINDOW_MILLIS = 60_000;
+    // Drop clients that have not called the API for this long, so the map does
+    // not grow without bound (one entry per distinct client that ever called it).
+    private static final long IDLE_TIMEOUT_NANOS = 10L * 60 * 1_000_000_000; // 10 minutes
 
-    private final int requestsPerMinute;
+    private final int capacity;
+    private final double refillPerSecond;
     private final ObjectMapper objectMapper;
-    private final Map<String, Window> windows = new ConcurrentHashMap<>();
+    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
-    record Window(long windowStartMillis, int count) {
+    /** Immutable token-bucket state for one client. */
+    record Bucket(long lastRefillNanos, double tokens) {
     }
 
     public RateLimitInterceptor(@Value("${app.rate-limit.requests-per-minute:60}") int requestsPerMinute,
                                 ObjectMapper objectMapper) {
-        this.requestsPerMinute = requestsPerMinute;
+        this.capacity = Math.max(0, requestsPerMinute);
+        this.refillPerSecond = capacity / 60.0;
         this.objectMapper = objectMapper;
     }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        if (requestsPerMinute <= 0) {
+        // CORS preflight (OPTIONS) performs no real work and carries no client
+        // identity — skip it so it neither consumes quota nor gets blocked.
+        if ("OPTIONS".equals(request.getMethod())) {
+            return true;
+        }
+        if (capacity <= 0) {
             return true; // disabled
         }
         String clientKey = clientKey(request);
-        long now = System.currentTimeMillis();
-        long windowStart = now - (now % WINDOW_MILLIS);
+        long now = System.nanoTime();
 
-        Window window = windows.compute(clientKey, (key, existing) -> {
-            if (existing == null || existing.windowStartMillis() != windowStart) {
-                return new Window(windowStart, 1);
+        // Compute the refill + consume atomically per client.
+        boolean[] allowed = {false};
+        buckets.compute(clientKey, (key, existing) -> {
+            Bucket b = existing == null ? new Bucket(now, capacity) : existing;
+            double elapsedSec = (now - b.lastRefillNanos()) / 1_000_000_000.0;
+            double tokens = Math.min(capacity, b.tokens() + elapsedSec * refillPerSecond);
+            if (tokens >= 1.0) {
+                allowed[0] = true;
+                return new Bucket(now, tokens - 1.0);
             }
-            return new Window(windowStart, existing.count() + 1);
+            // Refill recorded, but no token available to consume.
+            allowed[0] = false;
+            return new Bucket(now, tokens);
         });
 
-        if (window.count() > requestsPerMinute) {
+        // Evict idle clients (no request within IDLE_TIMEOUT) — their bucket is
+        // refilled to full by now, so dropping it is lossless on the next request.
+        buckets.entrySet().removeIf(e -> (now - e.getValue().lastRefillNanos()) > IDLE_TIMEOUT_NANOS);
+
+        if (!allowed[0]) {
             ApiErrorWriter.write(response, objectMapper, 429, "Rate limit exceeded",
-                    "Too many requests. Limit: " + requestsPerMinute + " per minute per client.", request);
+                    "Too many requests. Limit: " + capacity + " per minute per client.", request);
             return false;
         }
         return true;

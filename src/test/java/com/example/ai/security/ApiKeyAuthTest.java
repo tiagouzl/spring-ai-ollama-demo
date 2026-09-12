@@ -70,4 +70,15 @@ class ApiKeyAuthTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains("authenticated reply");
     }
+
+    @Test
+    void optionsPreflightIsNotBlockedByAuth() {
+        // A browser sends an OPTIONS preflight without the X-API-Key header.
+        // With auth enabled, it must still pass (so the real request can follow)
+        // instead of being rejected with 401.
+        ResponseEntity<String> response = rest.exchange(
+                "/ai/chat?message=Hello", HttpMethod.OPTIONS,
+                new HttpEntity<>(new HttpHeaders()), String.class);
+        assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
+    }
 }

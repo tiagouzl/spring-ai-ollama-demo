@@ -215,3 +215,74 @@ Revisão de código do estado atual (commit pós-rodada 11). Dois pontos foram i
    - *Nota para o futuro:* outros vector stores do Spring AI (ex. pgvector) usam **distância** e threshold "≤ distância máxima" — daí a confusão possível. No `SimpleVectorStore` a semântica é a inversa.
 
 **Validação:** suíte completa `./mvnw test` → **31 testes, 0 falhas** (novo: `SemanticCacheUnitTest` 4, unitário sem Spring, cobrindo chave opaca, tie-break e ausência de dependência do texto). Os 27 testes anteriores seguem verdes.
+
+---
+
+## 13. Revisão Geral e Endurecimento de CORS/Auth (12/09/2026)
+
+Exploração de todo o código-fonte (`com.example.ai.*`) + suíte de testes após o commit `a81cba3`
+(extração do system prompt compartilhado em `ChatPrompts.DEFAULT`). Estado de saúde confirmado:
+`./mvnw test` → **31 testes, 0 falhas, BUILD SUCCESS**. Um bug latente e dois pontos de
+endurecimento foram corrigidos; um descompasso de documentação foi sincronizado.
+
+1. **Bug real — preflight CORS bloqueado pelos interceptors de segurança.** `ApiSecurityConfig`
+   registra `ApiKeyAuthInterceptor` e `RateLimitInterceptor` em `/ai/**` **sem** exclusão por método.
+   Quando `app.auth.api-key` está configurado, o *preflight* `OPTIONS` do navegador (enviado **sem**
+   o header `X-API-Key`) caía no `ApiKeyAuthInterceptor` e recebia **401**, quebrando o acesso via
+   browser — justamente o caminho de produção que o README promove. Estava mascarado porque a chave
+   default é vazia. Correção: ambos os interceptors agora retornam `true` para `OPTIONS` (o preflight
+   não carrega o modelo nem consome quota). Testes novos `optionsPreflightIsNotBlockedByAuth`
+   (ApiKeyAuthTest) e `optionsPreflightIsNotRateLimited` (RateLimitTest) travam o comportamento.
+
+2. **Comparação constant-time da API key.** `ApiKeyAuthInterceptor` usava `String.equals` para
+   comparar a chave configurada com o header — vulnerável a ataque de temporização. Trocado por
+   `MessageDigest.isEqual(byte[], byte[])` (laço independente de conteúdo) via `constantTimeEquals(...)`.
+   O `null` do header é tratado antes. Sem impacto nos testes existentes.
+
+3. **Mapa de rate-limit com evicção de janelas antigas.** `RateLimitInterceptor.windows`
+   (`ConcurrentHashMap<String, Window>`) crescia sem limite — uma entrada por cliente distinto que
+   já chamou a API, retida para sempre. Agora, a cada `preHandle`, entradas de minutos anteriores
+   (`windowStartMillis < windowStart` da requisição atual) são removidas via `removeIf` (seguro em
+   `ConcurrentHashMap`). Não altera a semântica da janela fixa nem o limite.
+
+4. **Sincronização de documentação (doc drift).** O commit `a81cba3` extraiu o system prompt em
+   `ChatPrompts.DEFAULT`, mas o README ainda mostrava o literal inline `"You are a helpful, concise
+   assistant."` (snippet do `SimpleChatController` e diagrama de arquitetura). Ambos atualizados para
+   referenciar a constante. `ANALISE.md` ganha esta seção 13.
+
+**Validação:** suíte completa `./mvnw test` → **33 testes, 0 falhas** (novos: `ApiKeyAuthTest`
++1, `RateLimitTest` +1). O `OPTIONS` é ignorado pelos guardas mesmo com `app.auth.api-key` e
+`app.rate-limit.requests-per-minute` baixos; GET/POST continuam exigindo a chave e respeitando o limite.
+
+---
+
+## 14. Refinamentos aceitos: CORS credentials, Rate-limit (token-bucket) e versionamento do Vector Store (12/09/2026)
+
+Implementação das três sugestões de evolução levantadas na revisão da seção 13:
+
+1. **CORS — `allowCredentials` explícito e seguro.** `CorsConfig` agora inspeciona se o
+   `allowed-origins` é wildcard (`*`): com `*`, credenciais ficam **desligadas** (a spec CORS
+   proíbe a combinação `*` + credentials, que seria rejeitada de qualquer forma); com origens
+   **concretas**, credenciais ficam **ligadas** (caso o operador queira requisições com cookie/
+   auth header). Antes, o `allowCredentials` não era definido (default `false`), o que funcionava
+   mas silenciava a intenção e era uma armadilha caso alguém "ligasse credenciais" sem notar o
+   conflito com `*`. Testes novos `CorsConfigTest` (wildcard → sem header de credentials) e
+   `CorsSpecificOriginTest` (origem fixa → `Access-Control-Allow-Credentials: true`) travam o comportamento.
+
+2. **Rate limit — fixed-window → token-bucket em memória.** `RateLimitInterceptor` trocou a janela
+   fixa alinhada ao relógio por um **token bucket** por cliente: capacidade = `requests-per-minute`
+   tokens, reabastecidos continuamente a `N/60` por segundo, 1 token consumido por requisição. Isso
+   elimina a falha clássica da janela fixa (cliente enviava a cota toda antes da borda e outra vez
+   depois — até 2× o limite em rajada curta). A evicção de clientes ociosos (10 min) foi mantida
+   para não deixar o mapa crescer sem limite. O caminho multi-instância (Redis/Bucket4j) **permanece
+   documentado no README**, sem acoplar dependência ao demo autocontido. `RateLimitTest` segue verde
+   (3ª requisição no mesmo minuto → 429).
+
+3. **Vector store versionado pelo modelo de embedder.** `RagConfig` agora carimba o store persistido
+   (`./data/vector-store.json`) com o nome do modelo de embedding num sidecar `vector-store.json.embedder`
+   (lido de `spring.ai.ollama.embedding.options.model`). Se o modelo mudar — ou o cache for de antes
+   dessa versão (sem meta) — o `load` é ignorado e a re-ingestão ocorre, evitando responder contra
+   vetores obsoletos/incompatíveis com o embedder atual.
+
+**Validação:** suíte completa `./mvnw test` → **35 testes, 0 falhas** (novos: `CorsConfigTest` 1,
+`CorsSpecificOriginTest` 1). `RateLimitTest`, `ApiKeyAuthTest` e os demais 31 testes seguem verdes.

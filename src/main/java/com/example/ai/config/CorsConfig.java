@@ -21,12 +21,20 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        String[] origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toArray(String[]::new);
+        // The CORS spec forbids combining a wildcard origin ("*") with credentials.
+        // When the operator pinned concrete origins they may want credentialed
+        // requests (cookies/auth headers), so enable credentials only then; for the
+        // wildcard default we keep credentials off so a later "add credentials"
+        // cannot silently produce an invalid (and rejected) configuration.
+        boolean wildcard = Arrays.asList(origins).contains("*");
         registry.addMapping("/ai/**")
-                .allowedOrigins(Arrays.stream(allowedOrigins.split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .toArray(String[]::new))
+                .allowedOrigins(origins)
                 .allowedMethods("GET", "POST", "OPTIONS")
-                .allowedHeaders("*");
+                .allowedHeaders("*")
+                .allowCredentials(!wildcard);
     }
 }

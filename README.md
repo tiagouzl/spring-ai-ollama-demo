@@ -188,7 +188,7 @@ Instead of returning the model's raw text, the reply is parsed into a typed `Top
 
 #### `/ai/rag` — Retrieval-Augmented Generation (RAG)
 
-Answers are grounded in local documents under [`src/main/resources/docs/`](src/main/resources/docs/) (`spring-ai-overview.txt`, `rag-pattern.txt`, `ollama-local.txt`). Documents are split into token-based chunks (`TokenTextSplitter`) so retrieval returns focused passages that fit the local model's context window, embedded via `nomic-embed-text` and stored in a `SimpleVectorStore` that persists computed embeddings to `./data/vector-store.json` and reloads them on startup (**demo-grade — no external vector DB at query time**; see Roadmap for the pgvector path); at query time the top-2 similar chunks are injected into the prompt. Only chunks above `app.rag.similarity-threshold` (default `0.5`, cosine) are used — below it the question is answered without retrieval instead of forcing irrelevant context (which would cause hallucinated answers).
+Answers are grounded in local documents under [`src/main/resources/docs/`](src/main/resources/docs/) (`spring-ai-overview.txt`, `rag-pattern.txt`, `ollama-local.txt`). Documents are split into token-based chunks (`TokenTextSplitter`) so retrieval returns focused passages that fit the local model's context window, embedded via `nomic-embed-text` and stored in a `SimpleVectorStore` that persists computed embeddings to `./data/vector-store.json` and reloads them on startup (**demo-grade — no external vector DB at query time**; see Roadmap for the pgvector path). The store is stamped with the embedding-model name, so switching embedders automatically discards stale vectors and re-ingests; at query time the top-2 similar chunks are injected into the prompt. Only chunks above `app.rag.similarity-threshold` (default `0.5`, cosine) are used — below it the question is answered without retrieval instead of forcing irrelevant context (which would cause hallucinated answers).
 
 ```bash
 # GET — grounded answer
@@ -251,8 +251,9 @@ curl -X POST "http://localhost:8080/ai/chat" -H "Content-Type: application/json"
 ```
 
 > ⚠️ The prompt guard is a **heuristic** first line of defence, not a real guardrails
-> layer, and the rate limiter is in-memory (per instance). For production use Spring
-> Security (OIDC/JWT) plus a shared rate-limit store (Redis/Bucket4j).
+> layer, and the rate limiter is an in-memory **token bucket** (per instance) that
+> smooths throughput and avoids the fixed-window boundary burst. For multi-instance
+> production, back it with a shared store (Redis/Bucket4j).
 
 ### Docker (one-command stack)
 
@@ -338,7 +339,8 @@ public class SimpleChatController {
     private final SemanticCache semanticCache;
 
     public SimpleChatController(ChatClient.Builder builder, PromptGuard promptGuard, SemanticCache semanticCache) {
-        this.chatClient = builder.defaultSystem("You are a helpful, concise assistant.").build();
+        // ChatPrompts.DEFAULT is the shared system prompt kept in com.example.ai.chat.ChatPrompts
+        this.chatClient = builder.defaultSystem(ChatPrompts.DEFAULT).build();
         this.promptGuard = promptGuard;
         this.semanticCache = semanticCache;
     }
@@ -420,9 +422,9 @@ app:
 | `spring.ai.dashscope.api-key` | DashScope API key (`DASHSCOPE_API_KEY`; empty = DashScope disabled, `/ai/alibaba/*` falls back to Ollama) |
 | `spring.ai.dashscope.chat.options.model` | DashScope model (`qwen-plus`) |
 | `app.rag.similarity-threshold` | Min cosine similarity for a chunk to be used as RAG context (default `0.5`; below it the answer comes without retrieval) |
-| `app.cors.allowed-origins` | Comma-separated origins allowed to call `/ai/**` from a browser (default `*` = any; narrow for production) |
+| `app.cors.allowed-origins` | Comma-separated origins allowed to call `/ai/**` from a browser (default `*` = any; narrow for production). Credentials are enabled automatically only when you pin **concrete** origins — never with `*` (the CORS spec forbids `*` + credentials) |
 | `app.auth.api-key` | When set, `/ai/**` requires an `X-API-Key` header (401 otherwise). Empty = open (demo default) |
-| `app.rate-limit.requests-per-minute` | Max requests/minute per client on `/ai/**` (default `60`; `<= 0` disables). In-memory, per-instance |
+| `app.rate-limit.requests-per-minute` | Token-bucket capacity: `N` tokens that refill continuously at `N`/min, one consumed per request (no fixed-window boundary burst). `<= 0` disables. In-memory, per-instance |
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
 | `app.cache.semantic.enabled` | Semantic cache for `/ai/chat` (default `false` — opt-in, in-memory, fail-safe) |
 | `app.cache.semantic.similarity-threshold` | Cosine similarity required for a cache hit (default `0.95`; identical text ≈ 1.0) |
@@ -513,7 +515,7 @@ E2E_OLLAMA=true ./mvnw test -Dtest=OllamaE2EIT -DfailIfNoTests=false
        ▼              ▼              ▼                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      ChatClient (Ollama)                        │
-│  - defaultSystem("You are a helpful, concise assistant.")       │
+│  - defaultSystem(ChatPrompts.DEFAULT)  // shared system prompt  │
 │  - tools(DateTimeTools, MathTools)                              │
 │  - advisors(MessageChatMemoryAdvisor)                           │
 └─────────────────────────────────────────────────────────────────┘
