@@ -15,6 +15,11 @@ import java.security.MessageDigest;
  * {@code app.auth.api-key} is set, every request must carry a matching
  * {@code X-API-Key} header, otherwise a structured 401 is returned.
  * <p>
+ * Sensitive actuator endpoints are covered separately by
+ * {@link ActuatorApiKeyFilter} (interceptors registered via
+ * {@code WebMvcConfigurer} never reach Boot's actuator handler mapping).
+ * </p>
+ * <p>
  * Empty key (the default) leaves the endpoints open — ideal for local demos.
  * For production, consider a full Spring Security setup (OIDC/JWT) on top.
  * </p>
@@ -59,7 +64,7 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
      * loop length-independent; callers must never use {@link String#equals(Object)}
      * for secret comparison.
      */
-    private static boolean constantTimeEquals(String expected, String actual) {
+    static boolean constantTimeEquals(String expected, String actual) {
         if (actual == null) {
             return false;
         }

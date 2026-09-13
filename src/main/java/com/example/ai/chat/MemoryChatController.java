@@ -12,6 +12,10 @@ import java.util.UUID;
 
 @RestController
 public class MemoryChatController {
+    // ponytail: sessionId is a bearer token — whoever knows it can read/continue
+    // the conversation. It is NOT bound to the caller's X-API-Key (auth is global,
+    // not per-session). Acceptable for a demo (UUIDs are unguessable); bind
+    // sessions to the caller if this ever holds sensitive data.
 
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;

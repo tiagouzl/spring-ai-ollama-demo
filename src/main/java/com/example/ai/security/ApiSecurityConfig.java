@@ -8,6 +8,12 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Registers the security interceptors on all {@code /ai/**} endpoints. Order
  * matters: authentication runs before rate limiting, so unauthenticated requests
  * are rejected with 401 without consuming rate-limit budget.
+ * <p>
+ * Sensitive actuator endpoints ({@code /actuator/metrics},
+ * {@code /actuator/prometheus}) are covered by {@link ActuatorApiKeyFilter}
+ * instead — actuator uses Boot's own handler mapping, which never sees
+ * interceptors registered here.
+ * </p>
  */
 @Configuration
 public class ApiSecurityConfig implements WebMvcConfigurer {

@@ -23,6 +23,8 @@ services:
   ollama-pull:
     image: ollama/ollama:latest
     container_name: spring-ai-ollama-pull
+    environment:
+      OLLAMA_HOST: http://ollama:11434
     volumes:
       - ./data/ollama:/root/.ollama
     entrypoint: ["/bin/sh", "-c"]

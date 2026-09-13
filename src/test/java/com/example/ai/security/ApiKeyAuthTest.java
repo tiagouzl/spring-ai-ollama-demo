@@ -81,4 +81,26 @@ class ApiKeyAuthTest {
                 new HttpEntity<>(new HttpHeaders()), String.class);
         assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
     }
+
+    @Test
+    void sensitiveActuatorEndpointsRequireApiKeyButHealthStaysPublic() {
+        // /actuator/metrics and /actuator/prometheus can leak internals, so the
+        // ActuatorApiKeyFilter puts them behind the same API key; /actuator/health
+        // stays open for load-balancer/k8s probes.
+        assertThat(rest.getForEntity("/actuator/prometheus", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(rest.getForEntity("/actuator/metrics", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(rest.getForEntity("/actuator/health", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void sensitiveActuatorEndpointsAcceptValidApiKey() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-API-Key", "test-secret-key");
+        assertThat(rest.exchange("/actuator/metrics", HttpMethod.GET,
+                new HttpEntity<>(headers), String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
 }
