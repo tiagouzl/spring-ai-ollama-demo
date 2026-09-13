@@ -2,16 +2,13 @@
 
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.4-6DB33F?logo=spring&logoColor=white)
-![Spring AI](https://img.shields.io/badge/Spring_AI-1.0.1-green)
-![Spring AI Alibaba](https://img.shields.io/badge/Spring_AI_Alibaba-1.0.0.4-FF6A00)
 ![Ollama](https://img.shields.io/badge/Ollama-granite4.1:3b-000000)
-![DashScope](https://img.shields.io/badge/DashScope-qwen--plus-6B54D2)
 [![Build](https://img.shields.io/github/actions/workflow/status/tiagouzl/spring-ai-ollama-demo/ci.yml?branch=main&label=CI)](https://github.com/tiagouzl/spring-ai-ollama-demo/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A minimal, production-style **Spring Boot 3** application that integrates **Spring AI** with a **local LLM served by Ollama** — and optionally with **Alibaba DashScope (Qwen)** via **Spring AI Alibaba** — fully offline by default, cloud-ready when you set `DASHSCOPE_API_KEY`.
+A Spring Boot 3 application that integrates Spring AI with a local LLM served by Ollama — and optionally with Alibaba DashScope (Qwen) via Spring AI Alibaba — fully offline by default, cloud-ready when you set `DASHSCOPE_API_KEY`.
 
-This project is a clean reference for building AI-agent / LLM applications on the **Java + Spring** ecosystem, widely adopted by enterprises in China via the Spring AI Alibaba ecosystem.
+It started as a small demo to get `ChatClient` running against a local model and kept growing one feature at a time — streaming, memory, tools, RAG, then a security/observability pass once the happy-path stuff worked. If you want the blow-by-blow of what changed and why, `ANALISE.md` has every round documented.
 
 ---
 
@@ -152,14 +149,10 @@ The model can call Java methods annotated with `@Tool`. Tools live in [`src/main
 - `MathTools` — `add(a,b)`, `multiply(a,b)`, `percentage(value, percent)`
 
 ```bash
-# GET
 curl "http://localhost:8080/ai/chat/tools?message=What%20is%20the%20current%20date%3F%20Use%20the%20tool%20to%20answer."
 # → The current date is 2026-09-01.
 curl "http://localhost:8080/ai/chat/tools?message=What%20is%2015%20percent%20of%20200%3F%20Use%20the%20percentage%20tool."
 # → 15 percent of 200 is 30.
-# POST
-curl -X POST "http://localhost:8080/ai/chat/tools" -H "Content-Type: application/json" \
-  -d '{"message":"What is 15 percent of 200? Use the percentage tool."}'
 ```
 
 Tool calling requires a tool-capable model. Validated with `granite4.1:3b`. For best results use `qwen2.5`, `llama3.1`, or `deepseek-r1` via `ollama pull <model>` and update `application.yml`.
@@ -169,7 +162,6 @@ Tool calling requires a tool-capable model. Validated with `granite4.1:3b`. For 
 ```bash
 curl "http://localhost:8080/ai/chat/structured?message=Spring%20AI%20makes%20building%20AI%20apps%20easy"
 # → {"topic":"Spring AI","sentiment":"positive","rating":9}
-# POST also available (same ChatRequest body)
 ```
 
 Instead of returning the model's raw text, the reply is parsed into a typed `TopicSentiment` record (`topic`, `sentiment`, `rating`) via `ChatClient.call().entity()`. Swap the record for your own class (JSON Schema is generated automatically) — this is the pattern for building typed APIs on top of LLMs.
@@ -179,20 +171,14 @@ Instead of returning the model's raw text, the reply is parsed into a typed `Top
 Answers are grounded in local documents under [`src/main/resources/docs/`](src/main/resources/docs/) (`spring-ai-overview.txt`, `rag-pattern.txt`, `ollama-local.txt`). Documents are split into token-based chunks (`TokenTextSplitter`) so retrieval returns focused passages that fit the local model's context window, embedded via `nomic-embed-text` and stored in a `SimpleVectorStore` that persists computed embeddings to `./data/vector-store.json` and reloads them on startup (**demo-grade — no external vector DB at query time**; see Roadmap for the pgvector path). The store is stamped with the embedding-model name, so switching embedders automatically discards stale vectors and re-ingests; at query time the top-2 similar chunks are injected into the prompt. Only chunks above `app.rag.similarity-threshold` (default `0.5`, cosine) are used — below it the question is answered without retrieval instead of forcing irrelevant context (which would cause hallucinated answers).
 
 ```bash
-# GET — grounded answer
 curl "http://localhost:8080/ai/rag?question=What%20is%20Spring%20AI%3F"
 # → Spring AI is a framework that simplifies building AI-powered applications...
 curl "http://localhost:8080/ai/rag?question=How%20to%20run%20models%20locally%20with%20Ollama%3F"
 # → To run models locally with Ollama, you can follow these steps: ollama serve...
-# POST
-curl -X POST "http://localhost:8080/ai/rag" -H "Content-Type: application/json" \
-  -d '{"question":"What is Spring AI?"}'
 
 # Debug — see which chunks were retrieved (no LLM call). Returns a stable DTO
 # (id, text, score, metadata) instead of leaking Spring AI's internal Document class.
 curl "http://localhost:8080/ai/rag/debug?question=What%20is%20RAG%3F"
-curl -X POST "http://localhost:8080/ai/rag/debug" -H "Content-Type: application/json" \
-  -d '{"question":"What is RAG?"}'
 ```
 
 No external vector DB required — `SimpleVectorStore` keeps everything in-memory and persists computed embeddings to `./data/vector-store.json`, so subsequent startups skip the embedding calls. On CI without Ollama, document ingestion is skipped gracefully and `/ai/rag` falls back to a non-RAG answer.
@@ -207,11 +193,9 @@ curl "http://localhost:8080/ai/alibaba/status"
 # → Alibaba DashScope: NOT CONFIGURED ... will fallback to Ollama
 # → Alibaba DashScope: CONFIGURED — model: qwen-plus
 
-# Chat via DashScope (requires DASHSCOPE_API_KEY) — GET and POST
+# Chat via DashScope (requires DASHSCOPE_API_KEY)
 export DASHSCOPE_API_KEY=sk-xxxx
 curl "http://localhost:8080/ai/alibaba/chat?message=Hello%20from%20Qwen"
-curl -X POST "http://localhost:8080/ai/alibaba/chat" -H "Content-Type: application/json" \
-  -d '{"message":"Hello from Qwen"}'
 # Without key (fallback):
 curl "http://localhost:8080/ai/alibaba/chat?message=Hello"
 # → [Alibaba DashScope not configured] ... Ollama fallback ...
@@ -530,14 +514,6 @@ E2E_OLLAMA=true ./mvnw test -Dtest=OllamaE2EIT -DfailIfNoTests=false
 ```
 
 Error handling: `GlobalExceptionHandler` returns JSON `ApiError` (validation → 400, not acceptable → 406, timeout → 504, internal → 500); the security interceptors return 401/429, and DashScope/RAG failures surface as 502/503 — nothing is masked as a fake 200.
-
----
-
-## Why Java + Spring AI for AI agents?
-
-- **Enterprise-grade**: mature ecosystem, strong typing, Spring dependency injection
-- **Widely used in China** via the Spring AI Alibaba framework
-- **Local-first option** (via Ollama) for privacy, cost control and offline scenarios
 
 ---
 
