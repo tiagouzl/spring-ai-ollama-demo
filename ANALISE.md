@@ -48,10 +48,11 @@ com.example.ai
 │   └── AlibabaChatController     → /ai/alibaba/chat e /ai/alibaba/status (falha real → 502, não mascarada)
 ├── security/
 │   ├── ApiKeyAuthInterceptor  → auth opt-in X-API-Key (401)
-│   ├── RateLimitInterceptor   → rate limit janela fixa por cliente (429)
+│   ├── ActuatorApiKeyFilter   → mesmo guard para /actuator/metrics + /actuator/prometheus (filtro Servlet, 401)
+│   ├── RateLimitInterceptor   → rate limit token-bucket por cliente (429)
 │   ├── PromptGuard            → blocklist de prompt injection (400)
 │   ├── ApiSecurityConfig      → registra os interceptors em /ai/**
-│   └── ApiErrorWriter         → escreve ApiError JSON a partir dos interceptors
+│   └── ApiErrorWriter         → escreve ApiError JSON a partir dos interceptors/filtro
 └── api/ (records: ChatRequest, MemoryChatRequest, RagRequest, TopicSentiment, RagDebugDocument, ApiError)
 ```
 
@@ -286,3 +287,53 @@ Implementação das três sugestões de evolução levantadas na revisão da se�
 
 **Validação:** suíte completa `./mvnw test` → **35 testes, 0 falhas** (novos: `CorsConfigTest` 1,
 `CorsSpecificOriginTest` 1). `RateLimitTest`, `ApiKeyAuthTest` e os demais 31 testes seguem verdes.
+
+---
+
+## 15. Proteção do Actuator, PromptGuard sem falso-positivo e OLLAMA_HOST no compose (13/09/2026)
+
+Revisão externa + correção no commit `0175d76` (após a seção 14). Três itens aplicados, um
+documentado como aceito:
+
+1. **Actuator sensível atrás da API key — via filtro Servlet, não interceptor.**
+   `ApiSecurityConfig` protegia só `/ai/**`; `/actuator/metrics` e `/actuator/prometheus`
+   seguiam públicos mesmo com `APP_API_KEY` configurada. A primeira tentativa (adicionar os
+   paths ao `addInterceptors`) **não funcionou e o teste provou**: `/actuator/metrics` seguia
+   200 sem key. Diagnóstico confirmado com teste de sondagem — os endpoints do Actuator são
+   servidos pelo `WebMvcEndpointHandlerMapping` próprio do Boot, que nunca recebe os
+   interceptors registrados via `WebMvcConfigurer` (o chain dele contém só
+   `SkipPathExtensionContentNegotiation`). Correção: `security/ActuatorApiKeyFilter`
+   (`OncePerRequestFilter`, `@Component`), escopado em `shouldNotFilter` a
+   `/actuator/metrics*` e `/actuator/prometheus`; `/actuator/health` e `/actuator/info`
+   seguem públicos para probes de LB/k8s. Filtro roda no nível de Servlet, antes de qualquer
+   roteamento — cobre por construção, independente de handler mapping. Reaproveita
+   `ApiKeyAuthInterceptor.constantTimeEquals` (visibilidade relaxada de `private` para
+   package-private; implementação única, sem duplicação). Achado lateral: o 401 que
+   `/actuator/prometheus` retornava no contexto de teste era falso-positivo de fallthrough
+   (o endpoint Prometheus nem estava registrado sem `@AutoConfigureObservability`; em
+   produção, com export habilitado, o interceptor também não o alcançaria). Testes novos no
+   `ApiKeyAuthTest`: 401 sem key em metrics/prometheus + health 200 aberta, e 200 com key
+   válida (o filtro deixa o tráfego legítimo passar).
+
+2. **PromptGuard — `"you are now"` removido do default.** A entrada gerava falso-positivo em
+   frases legítimas (*"you are now free to configure the timeout"*). Removido de
+   `PromptGuard.DEFAULT_BLOCKED_PHRASES` **e** de `application.yml` (que sobrescreve o
+   default — mudar só o Java não teria efeito em runtime), com o motivo documentado nos dois
+   lugares; reativável via `app.prompt-guard.blocked-phrases`. Teste existente
+   (`promptInjectionPatternIsRejectedWith400`, via "Ignore previous instructions") segue verde.
+
+3. **`docker-compose.yml` — `OLLAMA_HOST` no `ollama-pull`.** O bug apontado na primeira
+   revisão: o container sobrescreve o entrypoint (sem `ollama serve`), então `ollama pull`
+   tentava falar com um daemon local inexistente em vez do container `ollama`. Agora com
+   `OLLAMA_HOST: http://ollama:11434`; validado com `docker compose config`.
+
+4. **Aceito e documentado (não corrigido): `sessionId` como bearer token sem dono.**
+   Comentário `ponytail:` no `MemoryChatController` — auth por API key é global, não amarra
+   sessões ao chamador. Aceitável para demo (UUIDs não-adivinháveis); vincular ao chamador
+   se o projeto um dia guardar dado sensível. Ficam também para próxima passada: rate limit
+   no actuator e docs públicas (`/v3/api-docs`, `/swagger-ui.html` — decisão já registrada
+   na seção 10).
+
+**Validação:** suíte completa `./mvnw test` → **37 testes, 0 falhas** (novos: +2 no
+`ApiKeyAuthTest`); `docker compose config` OK. README sincronizado (árvore `security/`,
+seção de auth, tabela `app.auth.api-key`, seção Observability).

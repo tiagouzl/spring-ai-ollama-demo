@@ -237,6 +237,8 @@ All three are **opt-in / on by default in a safe way** so the demo stays free an
 
 ```bash
 # 1) API-key auth — set APP_API_KEY (or app.auth.api-key) to protect /ai/**
+#    plus the sensitive actuator endpoints (/actuator/metrics, /actuator/prometheus).
+#    /actuator/health and /actuator/info stay public for probes.
 export APP_API_KEY=secret123
 curl -H "X-API-Key: secret123" "http://localhost:8080/ai/chat?message=Hello"   # 200
 curl "http://localhost:8080/ai/chat?message=Hello"                             # 401 Unauthorized
@@ -301,10 +303,11 @@ src/main/
 │   │   └── SemanticCache.java      # Opt-in semantic cache (embedding similarity, TTL)
 │   ├── security/
 │   │   ├── ApiKeyAuthInterceptor.java  # Optional X-API-Key guard (401)
-│   │   ├── RateLimitInterceptor.java   # Per-client fixed window (429)
+│   │   ├── ActuatorApiKeyFilter.java   # Same X-API-Key guard for /actuator/metrics + /actuator/prometheus (401)
+│   │   ├── RateLimitInterceptor.java   # Per-client token bucket (429)
 │   │   ├── PromptGuard.java            # Prompt-injection blocklist (400)
 │   │   ├── ApiSecurityConfig.java      # Registers the interceptors on /ai/**
-│   │   └── ApiErrorWriter.java         # ApiError JSON for interceptor responses
+│   │   └── ApiErrorWriter.java         # ApiError JSON for interceptor/filter responses
 │   ├── tools/
 │   │   ├── DateTimeTools.java      # @Tool — current date/time
 │   │   └── MathTools.java          # @Tool — arithmetic
@@ -423,7 +426,7 @@ app:
 | `spring.ai.dashscope.chat.options.model` | DashScope model (`qwen-plus`) |
 | `app.rag.similarity-threshold` | Min cosine similarity for a chunk to be used as RAG context (default `0.5`; below it the answer comes without retrieval) |
 | `app.cors.allowed-origins` | Comma-separated origins allowed to call `/ai/**` from a browser (default `*` = any; narrow for production). Credentials are enabled automatically only when you pin **concrete** origins — never with `*` (the CORS spec forbids `*` + credentials) |
-| `app.auth.api-key` | When set, `/ai/**` requires an `X-API-Key` header (401 otherwise). Empty = open (demo default) |
+| `app.auth.api-key` | When set, `/ai/**` plus `/actuator/metrics` and `/actuator/prometheus` require an `X-API-Key` header (401 otherwise). `/actuator/health` and `/actuator/info` stay public. Empty = open (demo default) |
 | `app.rate-limit.requests-per-minute` | Token-bucket capacity: `N` tokens that refill continuously at `N`/min, one consumed per request (no fixed-window boundary burst). `<= 0` disables. In-memory, per-instance |
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
 | `app.cache.semantic.enabled` | Semantic cache for `/ai/chat` (default `false` — opt-in, in-memory, fail-safe) |
@@ -491,7 +494,7 @@ curl http://localhost:8080/actuator/health        # {"status":"UP", ...}
 curl -H "Accept: text/plain" http://localhost:8080/actuator/prometheus   # metrics scrape
 ```
 
-The scrape output includes standard JVM/HTTP metrics (`jvm_*`, `http_server_requests_seconds_*`) and Spring AI's chat observations. Wire a Prometheus job to `http://<host>:8080/actuator/prometheus` and Grafana for dashboards.
+The scrape output includes standard JVM/HTTP metrics (`jvm_*`, `http_server_requests_seconds_*`) and Spring AI's chat observations. Wire a Prometheus job to `http://<host>:8080/actuator/prometheus` and Grafana for dashboards. When `APP_API_KEY` is set, `/actuator/metrics` and `/actuator/prometheus` require the `X-API-Key` header too (same guard as `/ai/**`); `/actuator/health` stays open.
 
 ### End-to-end test (optional, real Ollama in Docker)
 
