@@ -61,14 +61,11 @@ public class AlibabaChatController {
     private ResponseEntity<String> alibabaChat(String message) {
         promptGuard.validate(message);
         if (!isDashScopeConfigured()) {
-            return ResponseEntity.ok("""
-                    [Alibaba DashScope not configured]
-                    Set environment variable DASHSCOPE_API_KEY to enable this endpoint.
-                    Example: export DASHSCOPE_API_KEY=sk-xxxx && mvn spring-boot:run
-                    Get your key at: https://dashscope.console.aliyun.com/apiKey
-                    Ollama fallback — answering with local model instead:
-
-                    """ + ollamaChatClient.prompt(message).call().content());
+            // No silent Ollama fallback under 200: clients/automation must see
+            // the dependency as unavailable. Setup hints go to the log, not the response.
+            log.info("DashScope not configured; returning 503. Set DASHSCOPE_API_KEY to enable this endpoint.");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("Alibaba DashScope is not configured. Set the DASHSCOPE_API_KEY environment variable.");
         }
         if (dashScopeChatClient == null) {
             // Key is set but the bean was not created — a real misconfiguration.
@@ -91,7 +88,7 @@ public class AlibabaChatController {
     @GetMapping("/ai/alibaba/status")
     public String status() {
         if (!isDashScopeConfigured()) {
-            return "Alibaba DashScope: NOT CONFIGURED (DASHSCOPE_API_KEY not set) — /ai/alibaba/chat will fallback to Ollama";
+            return "Alibaba DashScope: NOT CONFIGURED (DASHSCOPE_API_KEY not set)";
         }
         DashScopeChatModel dashModel = dashScopeProvider.getIfAvailable();
         if (dashModel == null) {

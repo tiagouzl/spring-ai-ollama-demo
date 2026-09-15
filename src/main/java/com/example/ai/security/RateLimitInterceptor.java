@@ -3,6 +3,8 @@ package com.example.ai.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -31,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 public class RateLimitInterceptor implements HandlerInterceptor {
+
+    private static final Logger log = LoggerFactory.getLogger(RateLimitInterceptor.class);
 
     // Drop clients that have not called the API for this long, so the map does
     // not grow without bound (one entry per distinct client that ever called it).
@@ -85,6 +89,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         buckets.entrySet().removeIf(e -> (now - e.getValue().lastRefillNanos()) > IDLE_TIMEOUT_NANOS);
 
         if (!allowed[0]) {
+            log.warn("Rate limit exceeded for client {}", clientKey);
             ApiErrorWriter.write(response, objectMapper, 429, "Rate limit exceeded",
                     "Too many requests. Limit: " + capacity + " per minute per client.", request);
             return false;

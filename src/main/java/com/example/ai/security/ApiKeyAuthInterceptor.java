@@ -3,6 +3,8 @@ package com.example.ai.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -29,6 +31,8 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
 
     static final String API_KEY_HEADER = "X-API-Key";
 
+    private static final Logger log = LoggerFactory.getLogger(ApiKeyAuthInterceptor.class);
+
     private final String apiKey;
     private final ObjectMapper objectMapper;
 
@@ -51,6 +55,7 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
         if (constantTimeEquals(apiKey, request.getHeader(API_KEY_HEADER))) {
             return true;
         }
+        log.warn("API key authentication failed for {}", request.getRemoteAddr());
         ApiErrorWriter.write(response, objectMapper, 401, "Unauthorized",
                 "Missing or invalid " + API_KEY_HEADER + " header. Set app.auth.api-key to configure access.",
                 request);

@@ -24,6 +24,7 @@ final class ApiErrorWriter {
                       HttpServletRequest request) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setHeader("Cache-Control", "no-store");
         ApiError body = new ApiError(Instant.now(), status, error, message, request.getRequestURI());
         mapper.writeValue(response.getOutputStream(), body);
     }
