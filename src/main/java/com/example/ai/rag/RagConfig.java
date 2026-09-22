@@ -10,6 +10,8 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
@@ -36,41 +38,59 @@ public class RagConfig {
                                    @Value("${app.rag.store:simple}") String store,
                                    @Value("${app.rag.pgvector.dimensions:768}") int pgvectorDimensions) {
         if ("pgvector".equalsIgnoreCase(store)) {
-            return pgVectorStore(embeddingModel, jdbcTemplate, overview, rag, ollama, pgvectorDimensions);
+            return pgVectorStore(embeddingModel, jdbcTemplate, pgvectorDimensions);
         }
         return simpleVectorStore(embeddingModel, overview, rag, ollama, embedderModel, persistenceFile);
     }
 
     /**
      * External, concurrent-safe store for multi-instance deployments (the prod
-     * profile default). Schema (extension + table) is created on first boot;
-     * ingestion runs only when the table is empty so restarts never duplicate
-     * chunks. Embedding failures (Ollama down) only skip ingestion — boot and
-     * the endpoint (503 hint) keep working.
+     * profile default). Schema (extension + table) is created by the store's
+     * own initialization; document ingestion runs later in {@link #pgVectorIngestion}
+     * (an ApplicationRunner, i.e. after all bean initialization) and only when
+     * the table is empty, so restarts never duplicate chunks. Embedding failures
+     * (Ollama down) only skip ingestion — boot and the endpoint (503 hint) keep
+     * working.
      */
     private static VectorStore pgVectorStore(EmbeddingModel embeddingModel, JdbcTemplate jdbcTemplate,
-                                             Resource overview, Resource rag, Resource ollama, int dimensions) {
-        PgVectorStore store = PgVectorStore.builder(jdbcTemplate, embeddingModel)
+                                             int dimensions) {
+        return PgVectorStore.builder(jdbcTemplate, embeddingModel)
                 .dimensions(dimensions)
                 .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
                 .indexType(PgVectorStore.PgIndexType.HNSW)
                 .initializeSchema(true)
                 .build();
-        try {
-            Integer count = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM " + PgVectorStore.DEFAULT_TABLE_NAME, Integer.class);
-            if (count == null || count == 0) {
-                List<Document> chunks = chunkedDocs(overview, rag, ollama);
-                log.info("[RAG] Ingesting {} chunk(s) into pgvector", chunks.size());
-                store.add(chunks);
-            } else {
-                log.info("[RAG] pgvector table holds {} document(s), skipping ingestion", count);
+    }
+
+    /**
+     * Ingests the bundled docs into pgvector once the schema exists (runners
+     * execute after bean initialization, unlike the @Bean method above which
+     * runs before the store creates its table — ingesting there silently
+     * skipped first boots forever).
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.rag.store", havingValue = "pgvector")
+    public ApplicationRunner pgVectorIngestion(VectorStore vectorStore,
+                                               @Value("classpath:docs/spring-ai-overview.txt") Resource overview,
+                                               @Value("classpath:docs/rag-pattern.txt") Resource rag,
+                                               @Value("classpath:docs/ollama-local.txt") Resource ollama,
+                                               JdbcTemplate jdbcTemplate) {
+        return args -> {
+            try {
+                Integer count = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM " + PgVectorStore.DEFAULT_TABLE_NAME, Integer.class);
+                if (count == null || count == 0) {
+                    List<Document> chunks = chunkedDocs(overview, rag, ollama);
+                    log.info("[RAG] Ingesting {} chunk(s) into pgvector", chunks.size());
+                    vectorStore.add(chunks);
+                } else {
+                    log.info("[RAG] pgvector table holds {} document(s), skipping ingestion", count);
+                }
+            } catch (Exception e) {
+                // Do not fail startup when Ollama embeddings are unavailable (e.g. CI).
+                log.warn("[RAG] Skipped pgvector ingestion (embedding unavailable): {}", e.getMessage());
             }
-        } catch (Exception e) {
-            // Do not fail startup when Ollama embeddings are unavailable (e.g. CI).
-            log.warn("[RAG] Skipped pgvector ingestion (embedding unavailable): {}", e.getMessage());
-        }
-        return store;
+        };
     }
 
     private static VectorStore simpleVectorStore(EmbeddingModel embeddingModel,

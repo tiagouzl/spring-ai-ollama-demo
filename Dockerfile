@@ -11,16 +11,17 @@ RUN mvn -B -q -DskipTests package
 
 # ---------- runtime stage ----------
 FROM eclipse-temurin:21-jre
-# curl for the HEALTHCHECK; fixed uid 1000 so the mounted ./data dir (usually
-# owned by the host's first user) stays writable for the non-root app user.
+# curl for the HEALTHCHECK; the app runs as uid 1000 (numeric USER, no name
+# dependency — recent Temurin images already ship a uid-1000 user, so useradd
+# is only a fallback). Keep ./data writable by it (host first-user kwid match).
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd -m -U -u 1000 appuser
+    && (id 1000 >/dev/null 2>&1 || useradd -m -U -u 1000 appuser)
 WORKDIR /app
-RUN mkdir -p /app/data && chown -R appuser:appuser /app
+RUN mkdir -p /app/data && chown -R 1000:1000 /app
 COPY --from=build /build/target/*.jar app.jar
-RUN chown appuser:appuser app.jar
-USER appuser
+RUN chown 1000:1000 app.jar
+USER 1000
 EXPOSE 8080
 # ./data (HSQLDB chat memory + persisted vector store) is mounted from the host
 # via docker-compose, so conversations and embeddings survive container restarts.

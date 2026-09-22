@@ -499,7 +499,6 @@ tudo commitado, testado (56 testes) e com E2E reais verdes (Ollama, PG, Redis).
 ---
 
 ## 23. CI em tiers + cobertura travada + scan (pós-plano)
-
 1. **JaCoCo** — `prepare-agent` + `report` + `check` no `verify`; piso medido
    no dia (LINE 67%, BRANCH 54%), trava em 60%/45% com margem (sobe o mínimo
    quando a cobertura real subir).
@@ -515,3 +514,25 @@ tudo commitado, testado (56 testes) e com E2E reais verdes (Ollama, PG, Redis).
 
 **Validação:** `./mvnw -B verify` → **BUILD SUCCESS** (50 testes + gate JaCoCo
 verde); tier unit → 8/8 verde.
+
+---
+
+## 24. Validação do stack prod real (compose completo)
+
+Primeiro boot de verdade com `SPRING_PROFILES_ACTIVE=prod` (app + ollama +
+`db` pgvector + `redis`). Dois bugs reais apareceram e foram corrigidos:
+
+1. **Build quebrava: `useradd: UID 1000 is not unique`** — imagens Temurin
+   recentes já trazem usuário uid 1000. `Dockerfile` agora usa `USER 1000`
+   numérico (sem dependência de nome) com `useradd` só como fallback.
+2. **RAG vazio no primeiro boot** — a ingestão rodava dentro do `@Bean`
+   `vectorStore`, antes do `afterPropertiesSet` do `PgVectorStore` criar a
+   tabela: o `COUNT(*)` falhava, o catch pulava a ingestão, e o schema era
+   criado depois — vazio para sempre até restart. Correção: ingestão movida
+   para `ApplicationRunner pgVectorIngestion` (pós-inicialização), com a mesma
+   idempotência (só com tabela vazia).
+
+**Validado contra o stack no ar:** health/liveness/readiness UP; `/ai/**` e
+metrics/prometheus 401 sem key e 200 com key; `/ai/chat` real (granite);
+`/ai/rag` grounded do pgvector com `sources`; meters custom no scrape;
+memória de chat com 2 rows em `spring_ai_chat_memory` no Postgres.
