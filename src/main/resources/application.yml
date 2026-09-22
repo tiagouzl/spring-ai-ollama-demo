@@ -92,8 +92,11 @@ app:
     required: false
   rate-limit:
     # Max requests per minute per client (X-API-Key header when present, else IP
-    # address) on /ai/** endpoints. <= 0 disables. In-memory only — use a shared
-    # store (e.g. Redis/Bucket4j) for multi-instance deployments.
+    # address) on /ai/** endpoints. <= 0 disables. Backends (app.rate-limit.store):
+    # memory (default, per instance) or redis (shared across replicas via an
+    # atomic Lua token bucket; any Redis failure falls back to memory).
+    # Redis itself is configured via spring.data.redis.* (host/port).
+    store: memory
     requests-per-minute: 60
   prompt-guard:
     # Comma-separated, case-insensitive phrases rejected with 400 before the
@@ -135,3 +138,7 @@ management:
       enabled: true
     readinessstate:
       enabled: true
+    # Redis is only a rate-limit backend with in-memory fail-open: its outage
+    # must never flip health/readiness (the app keeps serving regardless).
+    redis:
+      enabled: false

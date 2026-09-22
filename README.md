@@ -216,7 +216,8 @@ curl -H "X-API-Key: secret123" "http://localhost:8080/ai/chat?message=Hello"   #
 curl "http://localhost:8080/ai/chat?message=Hello"                             # 401 Unauthorized
 
 # 2) Rate limiting — 60 requests/min per client by default (app.rate-limit.requests-per-minute)
-#    Exceeding it returns 429 Too Many Requests (per X-API-Key header, else per IP)
+#    Exceeding it returns 429 Too Many Requests with a Retry-After header
+#    (per X-API-Key header, else per IP)
 
 # 3) Prompt-injection guard — classic jailbreak phrases are rejected with 400
 #    before reaching the model (configurable via app.prompt-guard.blocked-phrases)
@@ -225,9 +226,12 @@ curl -X POST "http://localhost:8080/ai/chat" -H "Content-Type: application/json"
 ```
 
 The prompt guard is a heuristic first line of defence, not a real guardrails
-layer, and the rate limiter is an in-memory token bucket (per instance) that
-smooths throughput and avoids the fixed-window boundary burst. For multi-instance
-production, back it with a shared store (Redis/Bucket4j).
+layer, and the rate limiter is a token bucket (per instance in `memory` mode).
+For multi-instance production, set `app.rate-limit.store=redis` (the `prod`
+default; `redis` service in compose): the same bucket runs in Redis via an
+atomic Lua script, so quota is shared across replicas — and any Redis outage
+falls back to memory (fail-open, `RedisFallbackTest`). Redis never flips
+`/actuator/health` (`management.health.redis.enabled=false` by design).
 
 ### Docker (one-command stack)
 
@@ -414,7 +418,8 @@ app:
 | `app.rag.pgvector.dimensions` | Embedding width for the pgvector table (default `768` = `nomic-embed-text`) |
 | `app.cors.allowed-origins` | Comma-separated origins allowed to call `/ai/**` from a browser (default `*` = any; narrow for production). Credentials are enabled automatically only when you pin **concrete** origins — never with `*` (the CORS spec forbids `*` + credentials) |
 | `app.auth.api-key` | When set, `/ai/**` plus `/actuator/metrics` and `/actuator/prometheus` require an `X-API-Key` header (401 otherwise). `/actuator/health` and `/actuator/info` stay public. Empty = open (demo default) |
-| `app.rate-limit.requests-per-minute` | Token-bucket capacity: `N` tokens that refill continuously at `N`/min, one consumed per request (no fixed-window boundary burst). `<= 0` disables. In-memory, per-instance |
+| `app.rate-limit.requests-per-minute` | Token-bucket capacity: `N` tokens that refill continuously at `N`/min, one consumed per request (no fixed-window boundary burst). `<= 0` disables. `memory` = per-instance |
+| `app.rate-limit.store` | `memory` (default) or `redis` (shared quota via Lua, fail-open to memory; `prod` default) |
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
 | `app.cache.semantic.enabled` | Semantic cache for `/ai/chat` (default `false` — opt-in, in-memory, fail-safe) |
 | `app.cache.semantic.similarity-threshold` | Cosine similarity required for a cache hit (default `0.95`; identical text ≈ 1.0) |

@@ -13,6 +13,12 @@ spring:
     url: ${DATABASE_URL}
     username: ${PG_USER}
     password: ${PG_PASSWORD}
+  # Shared rate-limit backend. No default host: startup fails unless the
+  # operator provides REDIS_HOST (fail fast, like the other prod settings).
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
 app:
   rag:
     # External, concurrent-safe store shared across instances.
@@ -26,3 +32,5 @@ app:
     required: true
   rate-limit:
     requests-per-minute: ${RATE_LIMIT_PER_MINUTE:60}
+    # Shared quota across replicas (see spring.data.redis above).
+    store: ${RATE_LIMIT_STORE:redis}

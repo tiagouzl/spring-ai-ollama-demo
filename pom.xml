@@ -79,7 +79,14 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.8.14</version>
         </dependency>
-        <!-- Producao: PostgreSQL (chat memory JDBC + pgvector). O starter JDBC do
+        <!-- Rate limit distribuido (opt-in via app.rate-limit.store=redis, padrao
+              do prod). O Lettuce conecta de forma lazy: sem servidor configurado
+              nada muda — o interceptor usa o bucket em memoria. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+              <!-- Producao: PostgreSQL (chat memory JDBC + pgvector). O starter JDBC do
               Spring AI ja cria o schema da memoria de chat no Postgres; o driver
               fica disponivel em todos os perfis mas so e usado quando a URL aponta
               para postgres (perfil prod). -->

@@ -411,3 +411,28 @@ Terceiro slice (persistência externa, sem quebrar dev/test):
 **Validação:** `./mvnw test` → **49 testes, 0 falhas**; E2E real
 `E2E_PG=true ./mvnw test -Dtest=PgVectorE2EIT` → **2 testes, 0 falhas** (41s,
 tabela criada, ingestão pulada sem Ollama como desenhado).
+
+---
+
+## 19. Rate limit distribuído via Redis (fail-open)
+
+Quarto slice (escala horizontal do guard):
+
+1. **Backend opt-in** — `app.rate-limit.store: memory|redis`
+   (`spring-boot-starter-data-redis`, Lettuce lazy); modo `redis` executa o
+   mesmo token bucket num script Lua atômico (retorna `{allowed, retry}` —
+   `Retry-After` passa a ser exato, não mais o teto de 60s).
+2. **Fail-open** — qualquer exceção do Redis cai no bucket em memória (disponi-
+   bilidade > rigor), com warn no log; travado por `RedisFallbackTest`
+   (store=redis contra porta fechada → 200).
+3. **Achado real** — o starter registra um health indicator do Redis que
+   derrubava `/actuator/health` (503) sem servidor. Desligado de propósito
+   (`management.health.redis.enabled=false`): Redis aqui não é dependência de
+   serving, e outage dele jamais pode virar probe.
+4. **Prod/compose** — `store: ${RATE_LIMIT_STORE:redis}` + `spring.data.redis`
+   sem host default (fail fast); serviço `redis` (`redis:7-alpine`, `redisdata`).
+5. **Testes** — `RedisRateLimitE2EIT` (opt-in `E2E_REDIS`, container real:
+   2×200 + 429 com Retry-After numérico ≥ 1).
+
+**Validação:** `./mvnw test` → **52 testes, 0 falhas**; E2E real
+`E2E_REDIS=true ./mvnw test -Dtest=RedisRateLimitE2EIT` → **1 teste, 0 falhas**.

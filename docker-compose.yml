@@ -52,6 +52,10 @@ services:
       DATABASE_URL: ${DATABASE_URL:-}
       PG_USER: ${PG_USER:-ai}
       PG_PASSWORD: ${PG_PASSWORD:-changeme}
+      # Prod profile: shared rate-limit backend via the redis service.
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      RATE_LIMIT_STORE: ${RATE_LIMIT_STORE:-}
     volumes:
       # Must be writable by uid 1000 (the app user inside the image).
       - ./data:/app/data
@@ -84,5 +88,20 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Shared rate-limit backend for the prod profile (app.rate-limit.store=redis).
+  # Default (memory store) ignores it.
+  redis:
+    image: redis:7-alpine
+    container_name: spring-ai-redis
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  redisdata:
