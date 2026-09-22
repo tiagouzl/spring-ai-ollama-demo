@@ -10,7 +10,7 @@ COPY src ./src
 RUN mvn -B -q -DskipTests package
 
 # ---------- runtime stage ----------
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 # curl for the HEALTHCHECK; the app runs as uid 1000 (numeric USER, no name
 # dependency — recent Temurin images already ship a uid-1000 user, so useradd
 # is only a fallback). Keep ./data writable by it (host first-user kwid match).
