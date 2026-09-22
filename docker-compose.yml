@@ -48,6 +48,10 @@ services:
       # Set SPRING_PROFILES_ACTIVE=prod for fail-fast auth + restricted CORS.
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # Prod profile: PostgreSQL (chat memory + pgvector) via the db service.
+      DATABASE_URL: ${DATABASE_URL:-}
+      PG_USER: ${PG_USER:-ai}
+      PG_PASSWORD: ${PG_PASSWORD:-changeme}
     volumes:
       # Must be writable by uid 1000 (the app user inside the image).
       - ./data:/app/data
@@ -61,3 +65,24 @@ services:
       ollama-pull:
         condition: service_completed_successfully
     restart: unless-stopped
+
+  # PostgreSQL + pgvector for the prod profile (chat memory + vector store).
+  # Default (no SPRING_PROFILES_ACTIVE) still uses HSQLDB + JSON file.
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: spring-ai-postgres
+    environment:
+      POSTGRES_DB: ai_demo
+      POSTGRES_USER: ${PG_USER:-ai}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-ai} -d ai_demo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:

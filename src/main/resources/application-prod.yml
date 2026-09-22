@@ -7,12 +7,16 @@ spring:
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
-  # --- PostgreSQL (real prod: uncomment + add the postgres driver and pgvector starter) ---
-  # datasource:
-  #   url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/ai_demo}
-  #   username: ${PG_USER:ai}
-  #   password: ${PG_PASSWORD:changeme}
+  # PostgreSQL: chat memory (same JDBC starter, schema auto-created) + pgvector.
+  # No defaults: startup fails unless the operator provides them (fail fast).
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${PG_USER}
+    password: ${PG_PASSWORD}
 app:
+  rag:
+    # External, concurrent-safe store shared across instances.
+    store: pgvector
   cors:
     # No default: startup fails unless the operator pins explicit origins.
     allowed-origins: ${CORS_ALLOWED_ORIGINS}

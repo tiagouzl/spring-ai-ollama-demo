@@ -387,3 +387,27 @@ Segundo slice do plano (observabilidade + RAG, só código):
    `ObservabilityTest`.
 
 **Validação:** `./mvnw test` → **48 testes, 0 falhas**.
+
+---
+
+## 18. Postgres + pgvector opt-in (perfil prod de verdade)
+
+Terceiro slice (persistência externa, sem quebrar dev/test):
+
+1. **Deps** — `postgresql` (runtime) + `spring-ai-starter-vector-store-pgvector`;
+   auto-config do starter **excluída** em `application.yml` (criaria um segundo
+   bean `VectorStore` e falharia no HSQLDB).
+2. **`app.rag.store: simple|pgvector`** — `RagConfig` monta `PgVectorStore`
+   manualmente (HNSW + cosseno, `initializeSchema=true`, ingestão só com tabela
+   vazia = restarts idempotentes); `chunkedDocs` extraído e compartilhado.
+   Chat memory no Postgres é automática (mesmo starter JDBC, schema por plataforma).
+3. **Prod/compose** — `application-prod.yml` com datasource sem defaults (fail
+   fast) + `store: pgvector`; compose ganha serviço `db` (`pgvector:pg17`,
+   volume `pgdata`, healthcheck `pg_isready`).
+4. **Testes** — `RagDefaultStoreTest` trava o default (`SimpleVectorStore`);
+   `PgVectorE2EIT` (opt-in `E2E_PG`, mesmo gate duplo do Ollama) valida o wiring
+   real: bean `PgVectorStore`, tabela `vector_store` e `spring_ai_chat_memory`.
+
+**Validação:** `./mvnw test` → **49 testes, 0 falhas**; E2E real
+`E2E_PG=true ./mvnw test -Dtest=PgVectorE2EIT` → **2 testes, 0 falhas** (41s,
+tabela criada, ingestão pulada sem Ollama como desenhado).

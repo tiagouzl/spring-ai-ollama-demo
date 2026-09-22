@@ -410,6 +410,8 @@ app:
 | `spring.ai.dashscope.api-key` | DashScope API key (`DASHSCOPE_API_KEY`; empty = DashScope disabled, `/ai/alibaba/*` falls back to Ollama) |
 | `spring.ai.dashscope.chat.options.model` | DashScope model (`qwen-plus`) |
 | `app.rag.similarity-threshold` | Min cosine similarity for a chunk to be used as RAG context (default `0.5`; below it the answer comes without retrieval) |
+| `app.rag.store` | `simple` (default: in-memory + `./data/vector-store.json`) or `pgvector` (external PostgreSQL, the `prod` profile default) |
+| `app.rag.pgvector.dimensions` | Embedding width for the pgvector table (default `768` = `nomic-embed-text`) |
 | `app.cors.allowed-origins` | Comma-separated origins allowed to call `/ai/**` from a browser (default `*` = any; narrow for production). Credentials are enabled automatically only when you pin **concrete** origins — never with `*` (the CORS spec forbids `*` + credentials) |
 | `app.auth.api-key` | When set, `/ai/**` plus `/actuator/metrics` and `/actuator/prometheus` require an `X-API-Key` header (401 otherwise). `/actuator/health` and `/actuator/info` stay public. Empty = open (demo default) |
 | `app.rate-limit.requests-per-minute` | Token-bucket capacity: `N` tokens that refill continuously at `N`/min, one consumed per request (no fixed-window boundary burst). `<= 0` disables. In-memory, per-instance |
@@ -443,28 +445,19 @@ Natural next steps (see the Spring AI Alibaba Agent Framework path):
 
 ### Production RAG: SimpleVectorStore → pgvector
 
-`SimpleVectorStore` is in-memory at runtime with embeddings persisted to `./data/vector-store.json` and reloaded on startup — fine for a single instance/demo, but there is no external vector DB for query-time scale or multi-instance sharing. For production:
+Set `app.rag.store=pgvector` (already the `prod` profile default) and point the datasource at PostgreSQL — same `RagService` works unchanged, `VectorStore` is the abstraction. `RagConfig` builds `PgVectorStore` manually (HNSW + cosine, `initializeSchema=true`, ingestion only when the table is empty so restarts never duplicate chunks); the starter's auto-config stays excluded so dev/test on HSQLDB never see a second store bean.
 
-```yaml
-# 1. Add dependency (Spring AI PGVector starter)
-org.springframework.ai:spring-ai-vector-store-pgvector
-
-# 2. Configure PostgreSQL + pgvector extension
-spring:
-  ai:
-    vectorstore:
-      pgvector:
-        index-type: hnsw          # or IVFFlat
-        distance-type: cosine
-        dimensions: 768           # nomic-embed-text = 768
-        initialize-schema: true   # creates tables + vector extension
-  datasource:
-    url: jdbc:postgresql://localhost:5432/ai_demo
-    username: ${PG_USER}
-    password: ${PG_PASSWORD}
+```bash
+# Full prod stack (app + Ollama + Postgres): needs APP_API_KEY + CORS_ALLOWED_ORIGINS
+SPRING_PROFILES_ACTIVE=prod APP_API_KEY=secret CORS_ALLOWED_ORIGINS=https://app.example.com \
+  PG_PASSWORD=secret docker compose up --build
 ```
 
-Then swap `SimpleVectorStore` bean in `RagConfig` for `PgVectorStore` (auto-configured). Same `RagService` works unchanged — `VectorStore` is the abstraction.
+`docker-compose.yml` includes a `db` service (`pgvector/pgvector:pg17`, volume `pgdata`). Wiring is locked by `PgVectorE2EIT` (opt-in, real container, no mocks):
+
+```bash
+E2E_PG=true ./mvnw test -Dtest=PgVectorE2EIT -DfailIfNoTests=false
+```
 
 ### CI / Testing
 

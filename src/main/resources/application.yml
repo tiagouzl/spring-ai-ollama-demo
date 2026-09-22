@@ -11,6 +11,10 @@ spring:
     password: ""
   autoconfigure:
     exclude:
+      # pgvector auto-config would create a second VectorStore bean next to the
+      # one built manually in RagConfig (and would fail on HSQLDB in dev/test).
+      # RagConfig builds PgVectorStore explicitly when app.rag.store=pgvector.
+      - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
       # DashScope auto-configurations instantiate API clients that require a non-blank
       # api-key at startup — even when DashScope is disabled (no DASHSCOPE_API_KEY).
       # This demo does not use them: the DashScopeChatModel is created manually in
@@ -65,6 +69,9 @@ server:
 # Embeddings are computed once and reused on subsequent startups.
 app:
   rag:
+    # simple (default: in-memory + JSON file) | pgvector (external PostgreSQL,
+    # the prod profile default — shared across instances, concurrent-safe).
+    store: simple
     persistence-path: ./data/vector-store.json
     # Minimum cosine similarity (0..1) for a chunk to be used as RAG context.
     # Below this, the query is answered without retrieval instead of forcing

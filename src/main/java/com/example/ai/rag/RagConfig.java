@@ -7,11 +7,13 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,11 +27,55 @@ public class RagConfig {
 
     @Bean
     public VectorStore vectorStore(@Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel,
+                                   JdbcTemplate jdbcTemplate,
                                    @Value("classpath:docs/spring-ai-overview.txt") Resource overview,
                                    @Value("classpath:docs/rag-pattern.txt") Resource rag,
                                    @Value("classpath:docs/ollama-local.txt") Resource ollama,
                                    @Value("${spring.ai.ollama.embedding.options.model:nomic-embed-text}") String embedderModel,
-                                   @Value("${app.rag.persistence-path:./data/vector-store.json}") File persistenceFile) {
+                                   @Value("${app.rag.persistence-path:./data/vector-store.json}") File persistenceFile,
+                                   @Value("${app.rag.store:simple}") String store,
+                                   @Value("${app.rag.pgvector.dimensions:768}") int pgvectorDimensions) {
+        if ("pgvector".equalsIgnoreCase(store)) {
+            return pgVectorStore(embeddingModel, jdbcTemplate, overview, rag, ollama, pgvectorDimensions);
+        }
+        return simpleVectorStore(embeddingModel, overview, rag, ollama, embedderModel, persistenceFile);
+    }
+
+    /**
+     * External, concurrent-safe store for multi-instance deployments (the prod
+     * profile default). Schema (extension + table) is created on first boot;
+     * ingestion runs only when the table is empty so restarts never duplicate
+     * chunks. Embedding failures (Ollama down) only skip ingestion — boot and
+     * the endpoint (503 hint) keep working.
+     */
+    private static VectorStore pgVectorStore(EmbeddingModel embeddingModel, JdbcTemplate jdbcTemplate,
+                                             Resource overview, Resource rag, Resource ollama, int dimensions) {
+        PgVectorStore store = PgVectorStore.builder(jdbcTemplate, embeddingModel)
+                .dimensions(dimensions)
+                .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
+                .indexType(PgVectorStore.PgIndexType.HNSW)
+                .initializeSchema(true)
+                .build();
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM " + PgVectorStore.DEFAULT_TABLE_NAME, Integer.class);
+            if (count == null || count == 0) {
+                List<Document> chunks = chunkedDocs(overview, rag, ollama);
+                log.info("[RAG] Ingesting {} chunk(s) into pgvector", chunks.size());
+                store.add(chunks);
+            } else {
+                log.info("[RAG] pgvector table holds {} document(s), skipping ingestion", count);
+            }
+        } catch (Exception e) {
+            // Do not fail startup when Ollama embeddings are unavailable (e.g. CI).
+            log.warn("[RAG] Skipped pgvector ingestion (embedding unavailable): {}", e.getMessage());
+        }
+        return store;
+    }
+
+    private static VectorStore simpleVectorStore(EmbeddingModel embeddingModel,
+                                                 Resource overview, Resource rag, Resource ollama,
+                                                 String embedderModel, File persistenceFile) {
         SimpleVectorStore store = SimpleVectorStore.builder(embeddingModel).build();
         File metaFile = metaFileFor(persistenceFile);
 
@@ -52,16 +98,8 @@ public class RagConfig {
         // Ingest documents at startup; on CI without Ollama embeddings this will be skipped
         // (embedding call fails) and RAG endpoint will return a hint instead of crashing boot.
         try {
-            List<Document> docs = List.of(
-                    toDocument(overview, "spring-ai-overview"),
-                    toDocument(rag, "rag-pattern"),
-                    toDocument(ollama, "ollama-local")
-            );
-            // Split documents into token-based chunks so that long sources fit the
-            // small local model's context window and retrieval returns focused passages.
-            List<Document> chunks = new TokenTextSplitter().apply(docs);
-            log.info("[RAG] Ingesting {} document(s) split into {} chunk(s) with embedder {}",
-                    docs.size(), chunks.size(), embedderModel);
+            List<Document> chunks = chunkedDocs(overview, rag, ollama);
+            log.info("[RAG] Ingesting {} chunk(s) with embedder {}", chunks.size(), embedderModel);
             store.add(chunks);
             // Persist embeddings so subsequent restarts skip the embedding calls.
             if (persistenceFile.getParentFile() != null) {
@@ -77,8 +115,7 @@ public class RagConfig {
         return store;
     }
 
-    private static File metaFileFor(File persistenceFile) {
-        return new File(persistenceFile.getParentFile(), persistenceFile.getName() + ".embedder");
+    private static File metaFileFor(File persistenceFile) {        return new File(persistenceFile.getParentFile(), persistenceFile.getName() + ".embedder");
     }
 
     private static boolean embedderMatches(File metaFile, String embedderModel) {
@@ -102,6 +139,20 @@ public class RagConfig {
         } catch (IOException e) {
             log.warn("[RAG] Could not write embedder meta to {}: {}", metaFile.getAbsolutePath(), e.getMessage());
         }
+    }
+
+    /**
+     * Loads the bundled docs and splits them into token-based chunks so that long
+     * sources fit the small local model's context window and retrieval returns
+     * focused passages. Shared by both store backends.
+     */
+    private static List<Document> chunkedDocs(Resource overview, Resource rag, Resource ollama) {
+        List<Document> docs = List.of(
+                toDocument(overview, "spring-ai-overview"),
+                toDocument(rag, "rag-pattern"),
+                toDocument(ollama, "ollama-local")
+        );
+        return new TokenTextSplitter().apply(docs);
     }
 
     private static Document toDocument(Resource resource, String id) {
