@@ -495,3 +495,23 @@ Plano de endurecimento **concluído**: perfis dev/prod, fail-fast auth, CORS
 restrito, Retry-After, limites, probes, imagem non-root, Postgres + pgvector,
 Redis (rate-limit + cache), rotação de keys, fontes no RAG, meters custom —
 tudo commitado, testado (56 testes) e com E2E reais verdes (Ollama, PG, Redis).
+
+---
+
+## 23. CI em tiers + cobertura travada + scan (pós-plano)
+
+1. **JaCoCo** — `prepare-agent` + `report` + `check` no `verify`; piso medido
+   no dia (LINE 67%, BRANCH 54%), trava em 60%/45% com margem (sobe o mínimo
+   quando a cobertura real subir).
+2. **Tiers** — `unit` (8 testes, sem Spring/Docker:
+   `-Dtest='*UnitTest,ProdAuthGuardTest'`) → `integration` (`verify` completo);
+   E2E excluídos do default também via surefire (`**/e2e/**`, além do gate por
+   env que já existia).
+3. **Scan sem segredo** — Trivy FS (HIGH/CRITICAL → SARIF no code scanning) +
+   Dependabot (maven/docker/actions, semanal). OWASP Dependency-Check ficou de
+   fora de propósito: exige NVD API key; entra quando houver o secret.
+4. **Limpeza de contagem** — os "56 testes" anteriores incluíam XMLs stale de
+   runs E2E isolados; suite real: **50 testes, 0 falhas, 0 pulos**.
+
+**Validação:** `./mvnw -B verify` → **BUILD SUCCESS** (50 testes + gate JaCoCo
+verde); tier unit → 8/8 verde.

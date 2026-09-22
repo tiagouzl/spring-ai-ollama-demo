@@ -468,7 +468,9 @@ E2E_PG=true ./mvnw test -Dtest=PgVectorE2EIT -DfailIfNoTests=false
 
 ### CI / Testing
 
-- `./mvnw test` (Maven Wrapper included — no local Maven install needed) runs 37 integration tests (Spring Boot + mocked models in CI)
+- `./mvnw -B test -Dtest='*UnitTest,ProdAuthGuardTest'` — 8 fast tests, no Spring, no Docker (`unit` job)
+- `./mvnw -B verify` — full suite (50 tests, Spring + mocked models) with JaCoCo gate (LINE ≥ 60%, BRANCH ≥ 45%; raise the floor when coverage grows) (`integration` job)
+- Trivy FS scan (HIGH/CRITICAL → SARIF) + Dependabot (maven/docker/actions, weekly)
 - All controllers covered: simple chat, streaming, memory, tools, structured output, RAG (+ debug DTO and sanitized 503), Alibaba fallback + 502, request validation + prompt guard, persistent memory, observability, API-key auth, rate limiting, semantic cache, OpenAPI docs
 - GitHub Actions: `.github/workflows/ci.yml` runs on PR + push to `main`
 
