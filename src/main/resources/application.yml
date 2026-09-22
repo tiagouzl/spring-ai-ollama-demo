@@ -79,6 +79,10 @@ app:
     # (401 otherwise). Empty (default) = endpoints stay open, ideal for local
     # demos. For production, consider a full Spring Security/OIDC setup instead.
     api-key: ${APP_API_KEY:}
+    # Fail-fast: when true, startup aborts unless an api-key is configured, so a
+    # missing APP_API_KEY can never leave a deployment wide open by accident.
+    # The prod profile sets this to true; never enable it without a key.
+    required: false
   rate-limit:
     # Max requests per minute per client (X-API-Key header when present, else IP
     # address) on /ai/** endpoints. <= 0 disables. In-memory only — use a shared
@@ -112,3 +116,15 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      # Separate liveness/readiness groups for container probes: the app can be
+      # alive while Ollama/DB/vector store are down. Health sub-paths stay
+      # public (the ActuatorApiKeyFilter only guards metrics/prometheus).
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true

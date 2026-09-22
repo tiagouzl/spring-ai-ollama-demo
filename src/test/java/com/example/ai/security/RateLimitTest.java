@@ -55,6 +55,7 @@ class RateLimitTest {
         ResponseEntity<String> third = rest.getForEntity("/ai/chat?message=three", String.class);
         assertThat(third.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(third.getBody()).contains("Too many requests");
+        assertThat(third.getHeaders().getFirst("Retry-After")).isEqualTo("60");
     }
 
     @Test

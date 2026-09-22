@@ -45,8 +45,18 @@ services:
       SPRING_AI_OLLAMA_BASEURL: http://ollama:11434
       # Optional: protect /ai/** with an X-API-Key header (empty = open).
       APP_API_KEY: ${APP_API_KEY:-}
+      # Set SPRING_PROFILES_ACTIVE=prod for fail-fast auth + restricted CORS.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     volumes:
+      # Must be writable by uid 1000 (the app user inside the image).
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     depends_on:
       ollama-pull:
         condition: service_completed_successfully

@@ -337,3 +337,27 @@ documentado como aceito:
 **Validação:** suíte completa `./mvnw test` → **37 testes, 0 falhas** (novos: +2 no
 `ApiKeyAuthTest`); `docker compose config` OK. README sincronizado (árvore `security/`,
 seção de auth, tabela `app.auth.api-key`, seção Observability).
+
+---
+
+## 16. Slice alta-prioridade: perfis dev/prod, fail-fast auth, Retry-After, limites, probes, non-root
+
+Primeira execução do plano de endurecimento para produção (sem novas features de IA):
+
+1. **Perfis** — `application-dev.yml` (Ollama localhost, CORS `*`, auth opt-in) e
+   `application-prod.yml` (`OLLAMA_BASE_URL` via env, `app.auth.required=true`,
+   `app.cors.allowed-origins=${CORS_ALLOWED_ORIGINS}` sem default = falha explícita
+   se ausente, bloco Postgres comentado como template).
+2. **`ProdAuthGuard`** — `@PostConstruct` aborta o boot quando `required=true` sem
+   key. Travado por `ProdAuthGuardTest` (3 testes, `ApplicationContextRunner`).
+3. **`Retry-After: 60`** no 429 (janela de refill) — asserção fundida no
+   `RateLimitTest` existente (teste separado dividiria o bucket em memória e
+   quebraria por ordem de execução).
+4. **Limites de tamanho** — `@Size(max=4000)` em message/question, `@Size(max=128)`
+   em sessionId (nativo Bean Validation, sem dependência nova).
+5. **Probes** — `probes.enabled` + liveness/readiness em `application.yml`;
+   sub-paths de health seguem públicos (o filtro só guarda metrics/prometheus).
+6. **Docker** — runtime como `appuser` (uid 1000, compatível com `./data` do host),
+   `HEALTHCHECK` em `/actuator/health` (curl instalado), healthcheck do compose.
+
+**Validação:** `./mvnw test` → **44 testes, 0 falhas**; `docker compose config` OK.

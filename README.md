@@ -237,6 +237,19 @@ docker compose up --build
 
 Brings up **Ollama** (with `granite4.1:3b` + `nomic-embed-text` pulled automatically on first run) and the **app** on `http://localhost:8080`. The app's `./data` (HSQLDB chat memory + persisted vector store) is mounted from the host, so conversations and embeddings survive restarts. Optional: `APP_API_KEY=secret docker compose up --build` to enable the `X-API-Key` guard. Build only the app image: `docker build -t spring-ai-ollama-demo .`
 
+The runtime image runs as non-root (`appuser`, uid 1000 — keep `./data` writable by it) with a `HEALTHCHECK` on `/actuator/health`, and compose tracks it for the `app` service.
+
+### Profiles: dev vs prod
+
+`application.yml` holds shared defaults; `application-dev.yml` pins the local setup (Ollama at `localhost:11434`, open CORS, auth optional) and `application-prod.yml` the deployment one:
+
+```bash
+# Prod: fail-fast without key, restricted CORS, Ollama via service name
+SPRING_PROFILES_ACTIVE=prod APP_API_KEY=secret CORS_ALLOWED_ORIGINS=https://app.example.com ./mvnw spring-boot:run
+```
+
+With `prod`, startup aborts when `APP_API_KEY` is missing (`security/ProdAuthGuard`) and when `CORS_ALLOWED_ORIGINS` is unset (no default by design). Liveness/readiness groups are always on: `/actuator/health/liveness`, `/actuator/health/readiness` (public, for k8s probes); `/actuator/metrics` and `/actuator/prometheus` stay behind the API key when set.
+
 ### Interactive API docs (OpenAPI/Swagger)
 
 ```bash

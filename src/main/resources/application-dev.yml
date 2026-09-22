@@ -1,0 +1,17 @@
+# Local development: 100% offline, open endpoints, file-based persistence.
+# Run with: SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run (or nothing — these are the defaults).
+spring:
+  config:
+    activate:
+      on-profile: dev
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+app:
+  cors:
+    allowed-origins: "*"
+  auth:
+    api-key: ${APP_API_KEY:}
+    required: false
+  rate-limit:
+    requests-per-minute: 60

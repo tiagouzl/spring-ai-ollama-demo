@@ -78,6 +78,14 @@ class RequestValidationTest {
     }
 
     @Test
+    void oversizedMessageIsRejectedWith400() {
+        // 4001 chars: above the @Size(max=4000) cap that bounds model input.
+        ResponseEntity<String> response = post("/ai/chat", "{\"message\":\"" + "a".repeat(4001) + "\"}");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("Validation failed");
+    }
+
+    @Test
     void validMessageStillReachesTheModel() {
         when(ollamaChatModel.call(any(Prompt.class)))
                 .thenReturn(mockedResponse("valid request accepted"));

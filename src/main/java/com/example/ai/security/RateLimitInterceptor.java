@@ -40,6 +40,9 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     // not grow without bound (one entry per distinct client that ever called it).
     private static final long IDLE_TIMEOUT_NANOS = 10L * 60 * 1_000_000_000; // 10 minutes
 
+    // Worst-case wait for a token refill is one full window (60s).
+    static final String RETRY_AFTER_SECONDS = "60";
+
     private final int capacity;
     private final double refillPerSecond;
     private final ObjectMapper objectMapper;
@@ -90,6 +93,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
         if (!allowed[0]) {
             log.warn("Rate limit exceeded for client {}", clientKey);
+            response.setHeader("Retry-After", RETRY_AFTER_SECONDS);
             ApiErrorWriter.write(response, objectMapper, 429, "Rate limit exceeded",
                     "Too many requests. Limit: " + capacity + " per minute per client.", request);
             return false;
