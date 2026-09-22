@@ -23,3 +23,6 @@ application-local.yml
 # Runtime persistence (chat memory DB + RAG vector store)
 data/
 .aider*
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
