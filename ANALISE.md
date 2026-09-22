@@ -474,3 +474,24 @@ Sexto slice (último sem decisão de produto pendente):
 **Validação:** `./mvnw test` → **56 testes, 0 falhas**; E2E reais
 `E2E_REDIS=true ./mvnw test -Dtest='SemanticCacheRedisE2EIT,RedisRateLimitE2EIT'` →
 **2 testes, 0 falhas**.
+
+---
+
+## 22. Decisões de escopo (fim do plano)
+
+Itens restantes avaliados e **adiados por decisão explícita** (custo > benefício
+sem consumidor externo ou história real):
+
+1. **ProblemDetail (RFC 9457)** — `ApiError` atual já é estruturado e nunca vaza
+   internas; migrar quebraria todos os endpoints/testes sem ganho funcional.
+2. **Versionamento `/api/v1`** — sem consumidor externo, versionar é custo puro.
+3. **Multi-tenant** — exige identidade de tenant (header? key? JWT?); o
+   isolamento por `sessionId` já cobre o escopo demo.
+4. **Reranking** — exige modelo (DashScope cloud, excluído de propósito, ou
+   local fraco sem ganho claro).
+5. **Eval de respostas** — exige critério/golden set que só existe com uso real.
+
+Plano de endurecimento **concluído**: perfis dev/prod, fail-fast auth, CORS
+restrito, Retry-After, limites, probes, imagem non-root, Postgres + pgvector,
+Redis (rate-limit + cache), rotação de keys, fontes no RAG, meters custom —
+tudo commitado, testado (56 testes) e com E2E reais verdes (Ollama, PG, Redis).
