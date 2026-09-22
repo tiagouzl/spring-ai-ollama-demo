@@ -17,14 +17,14 @@ public class ProdAuthGuard {
     private final String apiKey;
 
     public ProdAuthGuard(@Value("${app.auth.required:false}") boolean required,
-                         @Value("${app.auth.api-key:}") String apiKey) {
+                         @Value("${app.auth.api-key:}") String apiKeys) {
         this.required = required;
-        this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.apiKey = apiKeys == null ? "" : apiKeys.trim();
     }
 
     @PostConstruct
     void requireApiKeyWhenAuthIsMandatory() {
-        if (required && apiKey.isEmpty()) {
+        if (required && ApiKeyAuthInterceptor.parseKeys(apiKey).isEmpty()) {
             throw new IllegalStateException(
                     "app.auth.required=true but no API key is configured. Set APP_API_KEY (or app.auth.api-key).");
         }

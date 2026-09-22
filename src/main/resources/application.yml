@@ -82,9 +82,11 @@ app:
     # (default * = any origin, fine for a public demo; narrow it in production).
     allowed-origins: "*"
   auth:
-    # When set, all /ai/** endpoints require an X-API-Key header with this value
-    # (401 otherwise). Empty (default) = endpoints stay open, ideal for local
-    # demos. For production, consider a full Spring Security/OIDC setup instead.
+    # When set, all /ai/** endpoints require an X-API-Key header with one of these
+    # values (401 otherwise). Comma-separated for rotation: add the new key,
+    # migrate clients, remove the old one. Empty (default) = endpoints stay open,
+    # ideal for local demos. For production, consider a full Spring Security/OIDC
+    # setup instead.
     api-key: ${APP_API_KEY:}
     # Fail-fast: when true, startup aborts unless an api-key is configured, so a
     # missing APP_API_KEY can never leave a deployment wide open by accident.

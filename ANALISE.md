@@ -436,3 +436,20 @@ Quarto slice (escala horizontal do guard):
 
 **Validação:** `./mvnw test` → **52 testes, 0 falhas**; E2E real
 `E2E_REDIS=true ./mvnw test -Dtest=RedisRateLimitE2EIT` → **1 teste, 0 falhas**.
+
+---
+
+## 20. Rotação de API keys (sem breaking)
+
+Quinto slice (opera a auth sem trocar de sistema):
+
+1. **`app.auth.api-key` vira lista** — comma-separated, blanks ignorados;
+   match-any constant-time em `ApiKeyAuthInterceptor.parseKeys/matchesAny`,
+   reutilizado pelo `ActuatorApiKeyFilter` e pelo `ProdAuthGuard` (que exige
+   ≥ 1 chave quando `required=true`). Chave única sem vírgula funciona igual.
+2. **Rotação = adicionar, migrar, remover** — sem endpoint novo, sem formato
+   novo; rate-limit por cliente continua por valor do header (buckets por key).
+3. **Testes** — `ApiKeyRotationTest` (contexto isolado `old-key,new-key`):
+   ambas aceitas em `/ai/**` e `/actuator/metrics`, desconhecida/ausente 401.
+
+**Validação:** `./mvnw test` → **56 testes, 0 falhas**.

@@ -11,6 +11,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Optional API-key authentication for the {@code /ai/**} endpoints: when
@@ -33,11 +35,13 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(ApiKeyAuthInterceptor.class);
 
-    private final String apiKey;
+    private final String apiKeys;
+    private final List<String> keyList;
     private final ObjectMapper objectMapper;
 
-    public ApiKeyAuthInterceptor(@Value("${app.auth.api-key:}") String apiKey, ObjectMapper objectMapper) {
-        this.apiKey = apiKey == null ? "" : apiKey.trim();
+    public ApiKeyAuthInterceptor(@Value("${app.auth.api-key:}") String apiKeys, ObjectMapper objectMapper) {
+        this.apiKeys = apiKeys == null ? "" : apiKeys;
+        this.keyList = parseKeys(this.apiKeys);
         this.objectMapper = objectMapper;
     }
 
@@ -49,10 +53,10 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
         if ("OPTIONS".equals(request.getMethod())) {
             return true;
         }
-        if (apiKey.isEmpty()) {
+        if (keyList.isEmpty()) {
             return true; // auth not configured — open
         }
-        if (constantTimeEquals(apiKey, request.getHeader(API_KEY_HEADER))) {
+        if (matchesAny(keyList, request.getHeader(API_KEY_HEADER))) {
             return true;
         }
         log.warn("API key authentication failed for {}", request.getRemoteAddr());
@@ -60,6 +64,39 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
                 "Missing or invalid " + API_KEY_HEADER + " header. Set app.auth.api-key to configure access.",
                 request);
         return false;
+    }
+
+    /**
+     * Splits the configured value (comma-separated, blanks dropped) so key
+     * rotation is just "add the new key, migrate clients, remove the old one".
+     * Single key without comma keeps working exactly as before.
+     */
+    static List<String> parseKeys(String configured) {
+        if (configured == null || configured.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(configured.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
+    /** True when the header matches ANY configured key (constant-time each). */
+    static boolean matchesAny(List<String> keys, String header) {
+        if (header == null) {
+            return false;
+        }
+        for (String key : keys) {
+            if (constantTimeEquals(key, header)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Single-key overload for callers holding the raw property value. */
+    static boolean matchesAny(String configured, String header) {
+        return matchesAny(parseKeys(configured), header);
     }
 
     /**

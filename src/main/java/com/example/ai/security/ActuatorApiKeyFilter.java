@@ -27,11 +27,11 @@ import java.io.IOException;
 @Component
 public class ActuatorApiKeyFilter extends OncePerRequestFilter {
 
-    private final String apiKey;
+    private final String apiKeys;
     private final ObjectMapper objectMapper;
 
-    public ActuatorApiKeyFilter(@Value("${app.auth.api-key:}") String apiKey, ObjectMapper objectMapper) {
-        this.apiKey = apiKey == null ? "" : apiKey.trim();
+    public ActuatorApiKeyFilter(@Value("${app.auth.api-key:}") String apiKeys, ObjectMapper objectMapper) {
+        this.apiKeys = apiKeys == null ? "" : apiKeys;
         this.objectMapper = objectMapper;
     }
 
@@ -45,8 +45,8 @@ public class ActuatorApiKeyFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (apiKey.isEmpty() || "OPTIONS".equals(request.getMethod())
-                || ApiKeyAuthInterceptor.constantTimeEquals(apiKey, request.getHeader(ApiKeyAuthInterceptor.API_KEY_HEADER))) {
+        if (ApiKeyAuthInterceptor.parseKeys(apiKeys).isEmpty() || "OPTIONS".equals(request.getMethod())
+                || ApiKeyAuthInterceptor.matchesAny(apiKeys, request.getHeader(ApiKeyAuthInterceptor.API_KEY_HEADER))) {
             chain.doFilter(request, response);
             return;
         }

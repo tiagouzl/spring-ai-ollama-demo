@@ -211,6 +211,7 @@ All three are **opt-in / on by default in a safe way** so the demo stays free an
 # 1) API-key auth — set APP_API_KEY (or app.auth.api-key) to protect /ai/**
 #    plus the sensitive actuator endpoints (/actuator/metrics, /actuator/prometheus).
 #    /actuator/health and /actuator/info stay public for probes.
+#    Comma-separated for rotation: APP_API_KEY=old,new accepts both until you drop the old one.
 export APP_API_KEY=secret123
 curl -H "X-API-Key: secret123" "http://localhost:8080/ai/chat?message=Hello"   # 200
 curl "http://localhost:8080/ai/chat?message=Hello"                             # 401 Unauthorized
