@@ -111,7 +111,7 @@ curl -N -X POST "http://localhost:8080/ai/chat/stream" \
 
 Returns `text/event-stream` with tokens arriving as individual `data:` events in real time (ideal for UI typewriter effects).
 
-Semantic cache (opt-in): with `app.cache.semantic.enabled=true`, `/ai/chat` embeds the message and returns the cached reply for similar past questions instead of calling the model. Fail-safe — any embedding error simply bypasses the cache.
+Semantic cache (opt-in): with `app.cache.semantic.enabled=true`, `/ai/chat` embeds the message and returns the cached reply for similar past questions instead of calling the model. Fail-safe — any embedding error simply bypasses the cache. With `app.cache.semantic.store=redis` (the `prod` way with the compose `redis` service) entries are shared across replicas.
 
 ```text
 data:1
@@ -423,6 +423,7 @@ app:
 | `app.rate-limit.store` | `memory` (default) or `redis` (shared quota via Lua, fail-open to memory; `prod` default) |
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
 | `app.cache.semantic.enabled` | Semantic cache for `/ai/chat` (default `false` — opt-in, in-memory, fail-safe) |
+| `app.cache.semantic.store` | `memory` (default, per instance) or `redis` (entries shared across replicas; any Redis failure bypasses) |
 | `app.cache.semantic.similarity-threshold` | Cosine similarity required for a cache hit (default `0.95`; identical text ≈ 1.0) |
 | `app.cache.semantic.ttl-seconds` | Entry lifetime before eviction (default `3600`) |
 | `app.cache.semantic.max-entries` | Max cached entries (default `1000`) |

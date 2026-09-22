@@ -453,3 +453,24 @@ Quinto slice (opera a auth sem trocar de sistema):
    ambas aceitas em `/ai/**` e `/actuator/metrics`, desconhecida/ausente 401.
 
 **Validação:** `./mvnw test` → **56 testes, 0 falhas**.
+
+---
+
+## 21. Cache semântico distribuído via Redis (fail-open)
+
+Sexto slice (último sem decisão de produto pendente):
+
+1. **Backend opt-in** — `app.cache.semantic.store: memory|redis`; modo `redis`
+   grava hashes `semcache:{id}` (embedding base64 + resposta + timestamp, TTL
+   na chave, id via `INCR`) e o lookup escolhe o mais próximo por cosseno com
+   o mesmo tie-break de atualidade do modo memória.
+2. **Fail-safe preservado** — qualquer exceção (Redis fora, entrada corrompida,
+   dimensão divergente) faz bypass: o modelo é chamado normalmente. Entradas
+   ilegíveis são deletadas; teto `max-entries` limpa como no modo memória.
+3. **Testes** — helper unitário atualizado (modo `memory`, template nulo);
+   `SemanticCacheRedisE2EIT` (opt-in `E2E_REDIS`, container real: 2ª pergunta
+   igual servida do Redis, modelo chamado 1×).
+
+**Validação:** `./mvnw test` → **56 testes, 0 falhas**; E2E reais
+`E2E_REDIS=true ./mvnw test -Dtest='SemanticCacheRedisE2EIT,RedisRateLimitE2EIT'` →
+**2 testes, 0 falhas**.

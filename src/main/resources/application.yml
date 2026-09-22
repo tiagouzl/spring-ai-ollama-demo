@@ -111,8 +111,10 @@ app:
       # Semantic cache for /ai/chat: embeds the message and answers from the cache
       # when a similar past question exists. Opt-in (off by default) — embedding
       # every request costs tokens/CPU. Fail-safe: any error bypasses the cache.
-      # In-memory, per instance; use a shared store for multi-instance deployments.
+      # Backends (app.cache.semantic.store): memory (default, per instance) or
+      # redis (entries shared across replicas; any Redis failure bypasses).
       enabled: false
+      store: memory
       # Cosine similarity required for a cache hit (identical text ≈ 1.0).
       similarity-threshold: 0.95
       # Entry lifetime in seconds; entries are evicted lazily on store.

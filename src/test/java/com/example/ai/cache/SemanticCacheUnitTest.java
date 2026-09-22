@@ -46,7 +46,7 @@ class SemanticCacheUnitTest {
     }
 
     private static SemanticCache newCache(EmbeddingModel model, MeterRegistry registry) {
-        return new SemanticCache(model, true, 0.95, 3600, 1000, registry);
+        return new SemanticCache(model, true, 0.95, 3600, 1000, "memory", registry, null);
     }
 
     @Test
