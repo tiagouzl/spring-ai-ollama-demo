@@ -2,6 +2,8 @@ package com.example.ai.cache;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -47,17 +49,29 @@ public class SemanticCache {
     // key would create one entry per phrasing and defeat the cache.
     private final Map<Long, Entry> cache = new ConcurrentHashMap<>();
     private final AtomicLong nextId = new AtomicLong();
+    private final Counter hits;
+    private final Counter misses;
+    private final Counter bypasses;
 
     public SemanticCache(EmbeddingModel embeddingModel,
                          @Value("${app.cache.semantic.enabled:false}") boolean enabled,
                          @Value("${app.cache.semantic.similarity-threshold:0.95}") double similarityThreshold,
                          @Value("${app.cache.semantic.ttl-seconds:3600}") long ttlSeconds,
-                         @Value("${app.cache.semantic.max-entries:1000}") int maxEntries) {
+                         @Value("${app.cache.semantic.max-entries:1000}") int maxEntries,
+                         MeterRegistry registry) {
         this.embeddingModel = embeddingModel;
         this.enabled = enabled;
         this.similarityThreshold = similarityThreshold;
         this.ttl = Duration.ofSeconds(ttlSeconds);
         this.maxEntries = maxEntries;
+        // Fixed names, one static tag — no prompt text, user id or other
+        // high-cardinality label ever reaches Prometheus.
+        this.hits = Counter.builder("app.cache.semantic.lookup").tag("result", "hit")
+                .description("Semantic cache lookups").register(registry);
+        this.misses = Counter.builder("app.cache.semantic.lookup").tag("result", "miss")
+                .description("Semantic cache lookups").register(registry);
+        this.bypasses = Counter.builder("app.cache.semantic.lookup").tag("result", "bypass")
+                .description("Semantic cache lookups").register(registry);
     }
 
     /**
@@ -66,6 +80,7 @@ public class SemanticCache {
      */
     public Optional<String> lookup(String message) {
         if (!enabled || message == null || message.isBlank()) {
+            bypasses.increment();
             return Optional.empty();
         }
         try {
@@ -91,11 +106,14 @@ public class SemanticCache {
             }
             if (best >= similarityThreshold) {
                 log.info("[cache] semantic hit for message (similarity={})", String.format("%.2f", best));
+                hits.increment();
                 return Optional.ofNullable(bestAnswer);
             }
+            misses.increment();
             return Optional.empty();
         } catch (Exception e) {
             log.debug("[cache] lookup failed, bypassing: {}", e.getMessage());
+            bypasses.increment();
             return Optional.empty();
         }
     }

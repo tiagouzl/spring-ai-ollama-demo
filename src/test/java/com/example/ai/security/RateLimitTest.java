@@ -21,6 +21,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Locks the rate limiter: with {@code app.rate-limit.requests-per-minute} set,
@@ -34,6 +35,9 @@ class RateLimitTest {
 
     @Autowired
     private TestRestTemplate rest;
+
+    @Autowired
+    private MeterRegistry registry;
 
     @MockitoBean
     private OllamaChatModel ollamaChatModel;
@@ -56,6 +60,7 @@ class RateLimitTest {
         assertThat(third.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(third.getBody()).contains("Too many requests");
         assertThat(third.getHeaders().getFirst("Retry-After")).isEqualTo("60");
+        assertThat(registry.get("app.security.ratelimit.rejected").counter().count()).isEqualTo(1.0);
     }
 
     @Test

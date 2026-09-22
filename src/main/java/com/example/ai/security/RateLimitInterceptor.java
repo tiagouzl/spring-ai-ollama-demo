@@ -1,6 +1,8 @@
 package com.example.ai.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -46,6 +48,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     private final int capacity;
     private final double refillPerSecond;
     private final ObjectMapper objectMapper;
+    private final Counter rejected;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
     /** Immutable token-bucket state for one client. */
@@ -53,10 +56,12 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     }
 
     public RateLimitInterceptor(@Value("${app.rate-limit.requests-per-minute:60}") int requestsPerMinute,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper, MeterRegistry registry) {
         this.capacity = Math.max(0, requestsPerMinute);
         this.refillPerSecond = capacity / 60.0;
         this.objectMapper = objectMapper;
+        this.rejected = Counter.builder("app.security.ratelimit.rejected")
+                .description("Requests rejected by the rate limiter").register(registry);
     }
 
     @Override
@@ -93,6 +98,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
         if (!allowed[0]) {
             log.warn("Rate limit exceeded for client {}", clientKey);
+            rejected.increment();
             response.setHeader("Retry-After", RETRY_AFTER_SECONDS);
             ApiErrorWriter.write(response, objectMapper, 429, "Rate limit exceeded",
                     "Too many requests. Limit: " + capacity + " per minute per client.", request);

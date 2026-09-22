@@ -2,6 +2,8 @@ package com.example.ai.cache;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import java.util.Arrays;
 
@@ -40,7 +42,11 @@ class SemanticCacheUnitTest {
     }
 
     private static SemanticCache newCache(EmbeddingModel model) {
-        return new SemanticCache(model, true, 0.95, 3600, 1000);
+        return newCache(model, new SimpleMeterRegistry());
+    }
+
+    private static SemanticCache newCache(EmbeddingModel model, MeterRegistry registry) {
+        return new SemanticCache(model, true, 0.95, 3600, 1000, registry);
     }
 
     @Test
@@ -107,5 +113,20 @@ class SemanticCacheUnitTest {
         assertThat(cache.size()).isEqualTo(3);
         // But every lookup resolves via similarity, not text equality.
         assertThat(cache.lookup("anything")).contains("answer C");
+    }
+
+    @Test
+    void lookupsAreCountedAsHitMissAndBypass() {
+        EmbeddingModel model = mock(EmbeddingModel.class);
+        when(model.embed(anyString())).thenReturn(allOnes());
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        SemanticCache cache = newCache(model, registry);
+
+        cache.store("known question", "answer A");
+        assertThat(cache.lookup("known question")).contains("answer A"); // hit
+        assertThat(cache.lookup("   ")).isEmpty(); // bypass (blank)
+
+        assertThat(registry.get("app.cache.semantic.lookup").tag("result", "hit").counter().count()).isEqualTo(1.0);
+        assertThat(registry.get("app.cache.semantic.lookup").tag("result", "bypass").counter().count()).isEqualTo(1.0);
     }
 }

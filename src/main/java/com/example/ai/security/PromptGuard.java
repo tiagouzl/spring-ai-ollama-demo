@@ -1,5 +1,7 @@
 package com.example.ai.security;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -30,13 +32,17 @@ public class PromptGuard {
                     + "disregard all previous instructions, new system prompt";
 
     private final List<String> blockedPhrases;
+    private final Counter rejected;
 
-    public PromptGuard(@Value("${app.prompt-guard.blocked-phrases:" + DEFAULT_BLOCKED_PHRASES + "}") List<String> blockedPhrases) {
+    public PromptGuard(@Value("${app.prompt-guard.blocked-phrases:" + DEFAULT_BLOCKED_PHRASES + "}") List<String> blockedPhrases,
+                       MeterRegistry registry) {
         this.blockedPhrases = blockedPhrases.stream()
                 .map(String::trim)
                 .filter(p -> !p.isEmpty())
                 .map(p -> p.toLowerCase(Locale.ROOT))
                 .toList();
+        this.rejected = Counter.builder("app.security.promptguard.rejected")
+                .description("Requests rejected by the prompt-injection blocklist").register(registry);
     }
 
     /**
@@ -51,6 +57,7 @@ public class PromptGuard {
         String lower = message.toLowerCase(Locale.ROOT);
         for (String phrase : blockedPhrases) {
             if (lower.contains(phrase)) {
+                rejected.increment();
                 throw new IllegalArgumentException("Message rejected: blocked prompt-injection pattern detected");
             }
         }

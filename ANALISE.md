@@ -361,3 +361,29 @@ Primeira execução do plano de endurecimento para produção (sem novas feature
    `HEALTHCHECK` em `/actuator/health` (curl instalado), healthcheck do compose.
 
 **Validação:** `./mvnw test` → **44 testes, 0 falhas**; `docker compose config` OK.
+
+---
+
+## 17. RAG com fontes + métricas da aplicação (sem deps novas)
+
+Segundo slice do plano (observabilidade + RAG, só código):
+
+1. **`/ai/rag` retorna fontes** — novo record `api/RagAnswer(answer, sources)`;
+   `RagService.answerWithSources` devolve a resposta + o metadata `source`
+   (distinto) dos chunks usados — vazio quando sem contexto relevante. O 503
+   sanitizado virou `RagAnswer` com mensagem fixa (JSON consistente). O `source`
+   já era carimbado na ingestão (`RagConfig.toDocument`), faltava só expô-lo.
+2. **Três situações já diferenciadas** (confirmado, sem mudança): sem contexto →
+   resposta + nota; contexto sem resposta → system prompt manda dizer "don't
+   know"; falha técnica → 503 com dica acionável.
+3. **Meters custom** (Micrometer já no classpath): `app.rag.questions/empty`,
+   `app.cache.semantic.lookup{result=hit|miss|bypass}`,
+   `app.security.ratelimit.rejected`, `app.security.promptguard.rejected` —
+   nomes fixos, sem labels de prompt/usuário (sem risco de cardinalidade).
+4. **Testes:** `MetricsTest` (contexto isolado, contagens exatas),
+   `ragAnswerIncludesSources`, hit/miss/bypass no `SemanticCacheUnitTest`
+   (helper passou a injetar `SimpleMeterRegistry`), counter do 429 no
+   `RateLimitTest`, `app_cache_semantic_lookup_total` no scrape do
+   `ObservabilityTest`.
+
+**Validação:** `./mvnw test` → **48 testes, 0 falhas**.

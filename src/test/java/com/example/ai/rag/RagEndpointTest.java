@@ -79,6 +79,20 @@ class RagEndpointTest {
     }
 
     @Test
+    void ragAnswerIncludesSources() {
+        when(vectorStore.similaritySearch(any(SearchRequest.class)))
+                .thenReturn(List.of(new Document("chunk about Spring AI", Map.of("source", "spring-ai-overview"))));
+        when(ollamaChatModel.call(any(Prompt.class)))
+                .thenReturn(mockedResponse("grounded answer"));
+
+        String body = rest.getForObject("/ai/rag?question=What%20is%20Spring%20AI%3F", String.class);
+
+        assertThat(body).contains("grounded answer");
+        assertThat(body).contains("\"sources\"");
+        assertThat(body).contains("spring-ai-overview");
+    }
+
+    @Test
     void ragFailureReturnsSanitized503WithoutLeakingInternals() {
         when(vectorStore.similaritySearch(any(SearchRequest.class)))
                 .thenThrow(new RuntimeException("secret internal path /etc/passwd"));

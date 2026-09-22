@@ -1,5 +1,6 @@
 package com.example.ai.rag;
 
+import com.example.ai.api.RagAnswer;
 import com.example.ai.api.RagDebugDocument;
 import com.example.ai.api.RagRequest;
 import com.example.ai.security.PromptGuard;
@@ -26,12 +27,12 @@ public class RagController {
     }
 
     @GetMapping("/ai/rag")
-    public ResponseEntity<String> ragGet(@RequestParam(value = "question", defaultValue = "What is Spring AI and how does RAG work?") String question) {
+    public ResponseEntity<RagAnswer> ragGet(@RequestParam(value = "question", defaultValue = "What is Spring AI and how does RAG work?") String question) {
         return answer(question);
     }
 
     @PostMapping("/ai/rag")
-    public ResponseEntity<String> ragPost(@Valid @RequestBody RagRequest request) {
+    public ResponseEntity<RagAnswer> ragPost(@Valid @RequestBody RagRequest request) {
         return answer(request.question());
     }
 
@@ -45,17 +46,17 @@ public class RagController {
         return ragService.debugSearch(request.question());
     }
 
-    private ResponseEntity<String> answer(String question) {
+    private ResponseEntity<RagAnswer> answer(String question) {
         promptGuard.validate(question);
         try {
-            return ResponseEntity.ok(ragService.answer(question));
+            return ResponseEntity.ok(ragService.answerWithSources(question));
         } catch (Exception e) {
             // Never leak exception messages to clients — log the detail server-side
             // and return a fixed, actionable hint instead.
             log.warn("RAG request failed for question: {}", question, e);
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body("RAG is unavailable. Ensure Ollama is running and the embedding model is installed "
-                            + "(ollama pull nomic-embed-text). Check the server logs for details.");
+                    .body(new RagAnswer("RAG is unavailable. Ensure Ollama is running and the embedding model is installed "
+                            + "(ollama pull nomic-embed-text). Check the server logs for details.", List.of()));
         }
     }
 }

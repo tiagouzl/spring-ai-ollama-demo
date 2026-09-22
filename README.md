@@ -172,9 +172,9 @@ Answers are grounded in local documents under [`src/main/resources/docs/`](src/m
 
 ```bash
 curl "http://localhost:8080/ai/rag?question=What%20is%20Spring%20AI%3F"
-# → Spring AI is a framework that simplifies building AI-powered applications...
+# → {"answer":"Spring AI is a framework...","sources":["spring-ai-overview"]}
 curl "http://localhost:8080/ai/rag?question=How%20to%20run%20models%20locally%20with%20Ollama%3F"
-# → To run models locally with Ollama, you can follow these steps: ollama serve...
+# → {"answer":"To run models locally...","sources":["ollama-local"]}
 
 # Debug — see which chunks were retrieved (no LLM call). Returns a stable DTO
 # (id, text, score, metadata) instead of leaking Spring AI's internal Document class.
@@ -481,7 +481,7 @@ curl http://localhost:8080/actuator/health        # {"status":"UP", ...}
 curl -H "Accept: text/plain" http://localhost:8080/actuator/prometheus   # metrics scrape
 ```
 
-The scrape output includes standard JVM/HTTP metrics (`jvm_*`, `http_server_requests_seconds_*`) and Spring AI's chat observations. Wire a Prometheus job to `http://<host>:8080/actuator/prometheus` and Grafana for dashboards. When `APP_API_KEY` is set, `/actuator/metrics` and `/actuator/prometheus` require the `X-API-Key` header too (same guard as `/ai/**`); `/actuator/health` stays open.
+The scrape output includes standard JVM/HTTP metrics (`jvm_*`, `http_server_requests_seconds_*`) and Spring AI's chat observations. App-specific counters with fixed names (no prompt/user labels, so no cardinality risk): `app_rag_questions_total`, `app_rag_empty_total`, `app_cache_semantic_lookup_total{result="hit|miss|bypass"}`, `app_security_ratelimit_rejected_total`, `app_security_promptguard_rejected_total`. Wire a Prometheus job to `http://<host>:8080/actuator/prometheus` and Grafana for dashboards. When `APP_API_KEY` is set, `/actuator/metrics` and `/actuator/prometheus` require the `X-API-Key` header too (same guard as `/ai/**`); `/actuator/health` stays open.
 
 ### End-to-end test (optional, real Ollama in Docker)
 

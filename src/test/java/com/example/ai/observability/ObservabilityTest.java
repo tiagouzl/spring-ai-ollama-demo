@@ -78,5 +78,7 @@ class ObservabilityTest {
         assertThat(scrape).isNotNull();
         assertThat(scrape).contains("http_server_requests_seconds_count");
         assertThat(scrape).contains("jvm_memory_used_bytes");
+        // App meters use fixed names (no prompt/user labels) and are exported on the same scrape.
+        assertThat(scrape).contains("app_cache_semantic_lookup_total");
     }
 }

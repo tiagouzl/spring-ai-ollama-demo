@@ -1,6 +1,9 @@
 package com.example.ai.rag;
 
+import com.example.ai.api.RagAnswer;
 import com.example.ai.api.RagDebugDocument;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -17,24 +20,40 @@ public class RagService {
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
     private final double similarityThreshold;
+    private final Counter questions;
+    private final Counter emptyRetrievals;
 
     public RagService(ChatClient.Builder builder,
                       VectorStore vectorStore,
-                      @Value("${app.rag.similarity-threshold:0.5}") double similarityThreshold) {
+                      @Value("${app.rag.similarity-threshold:0.5}") double similarityThreshold,
+                      MeterRegistry registry) {
         this.vectorStore = vectorStore;
         this.similarityThreshold = similarityThreshold;
         this.chatClient = builder
                 .defaultSystem("You are a helpful assistant. Answer grounded in the provided context. If the context does not contain the answer, say you don't know.")
                 .build();
+        this.questions = Counter.builder("app.rag.questions").description("RAG questions answered").register(registry);
+        this.emptyRetrievals = Counter.builder("app.rag.empty").description("RAG answers without retrieval (no relevant context)").register(registry);
     }
 
-    public String answer(String question) {
+    /**
+     * Answers grounded in the top-2 retrieved chunks, returning the reply plus
+     * the chunks' {@code source} metadata so callers can show where the answer
+     * came from. No relevant context → answer without retrieval + empty sources
+     * (never a forced hallucination); technical failures propagate to the
+     * controller's sanitized 503.
+     */
+    public RagAnswer answerWithSources(String question) {
+        questions.increment();
         var docs = similaritySearch(question);
         if (docs == null || docs.isEmpty()) {
+            emptyRetrievals.increment();
             // No relevant context (nothing stored or nothing above the similarity
             // threshold) — still return LLM answer but with a hint; this is not an error
-            return chatClient.prompt().user(question).call().content()
-                    + "\n\n[Note: no relevant context found in vector store; answer is without retrieval.]";
+            String content = chatClient.prompt().user(question).call().content();
+            return new RagAnswer(content
+                    + "\n\n[Note: no relevant context found in vector store; answer is without retrieval.]",
+                    List.of());
         }
         String context = docs.stream()
                 .map(Document::getText)
@@ -51,7 +70,11 @@ public class RagService {
         if (content == null || content.isBlank()) {
             throw new IllegalStateException("RAG: LLM returned empty content for question: " + question);
         }
-        return content;
+        List<String> sources = docs.stream()
+                .map(doc -> String.valueOf(doc.getMetadata().getOrDefault("source", doc.getId())))
+                .distinct()
+                .toList();
+        return new RagAnswer(content, sources);
     }
 
     /**
