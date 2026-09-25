@@ -81,9 +81,11 @@ app:
     # irrelevant context into the prompt (avoids hallucinated answers).
     similarity-threshold: 0.5
   cors:
-    # Comma-separated list of origins allowed to call /ai/** from a browser
-    # (default * = any origin, fine for a public demo; narrow it in production).
-    allowed-origins: "*"
+    # Comma-separated origins allowed to call /ai/** from a browser.
+    # Default: empty = no CORS headers at all (same-origin only, deny by
+    # default). The dev profile keeps "*" for browser demos; prod fails
+    # fast until CORS_ALLOWED_ORIGINS is set.
+    allowed-origins: ""
   auth:
     # When set, all /ai/** endpoints require an X-API-Key header with one of these
     # values (401 otherwise). Comma-separated for rotation: add the new key,

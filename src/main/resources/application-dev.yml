@@ -9,6 +9,7 @@ spring:
       base-url: http://localhost:11434
 app:
   cors:
+    # Open CORS for browser demos (the base profile default is deny-by-default).
     allowed-origins: "*"
   auth:
     api-key: ${APP_API_KEY:}

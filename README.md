@@ -249,7 +249,7 @@ The runtime image runs as non-root (`appuser`, uid 1000 — keep `./data` writab
 
 ### Profiles: dev vs prod
 
-`application.yml` holds shared defaults; `application-dev.yml` pins the local setup (Ollama at `localhost:11434`, open CORS, auth optional) and `application-prod.yml` the deployment one:
+`application.yml` holds shared defaults (including **deny-by-default CORS** — no cross-origin headers unless configured); `application-dev.yml` pins the local setup (Ollama at `localhost:11434`, open CORS for browser demos, auth optional) and `application-prod.yml` the deployment one:
 
 ```bash
 # Prod: fail-fast without key, restricted CORS, Ollama via service name
@@ -397,7 +397,7 @@ app:
   rag:
     similarity-threshold: 0.5
   cors:
-    allowed-origins: "*"
+    allowed-origins: ""
   auth:
     api-key: ${APP_API_KEY:}
   rate-limit:
@@ -420,7 +420,7 @@ app:
 | `app.rag.similarity-threshold` | Min cosine similarity for a chunk to be used as RAG context (default `0.5`; below it the answer comes without retrieval) |
 | `app.rag.store` | `simple` (default: in-memory + `./data/vector-store.json`) or `pgvector` (external PostgreSQL, the `prod` profile default) |
 | `app.rag.pgvector.dimensions` | Embedding width for the pgvector table (default `768` = `nomic-embed-text`) |
-| `app.cors.allowed-origins` | Comma-separated origins allowed to call `/ai/**` from a browser (default `*` = any; narrow for production). Credentials are enabled automatically only when you pin **concrete** origins — never with `*` (the CORS spec forbids `*` + credentials) |
+| `app.cors.allowed-origins` | Comma-separated origins allowed to call `/ai/**` from a browser. **Default: empty = no CORS headers at all** (same-origin only, deny by default); the dev profile sets `*` for browser demos. Credentials are enabled automatically only when you pin **concrete** origins — never with `*` (the CORS spec forbids `*` + credentials) |
 | `app.auth.api-key` | When set, `/ai/**` plus `/actuator/metrics` and `/actuator/prometheus` require an `X-API-Key` header (401 otherwise). `/actuator/health` and `/actuator/info` stay public. Empty = open (demo default) |
 | `app.rate-limit.requests-per-minute` | Token-bucket capacity: `N` tokens that refill continuously at `N`/min, one consumed per request (no fixed-window boundary burst). `<= 0` disables. `memory` = per-instance |
 | `app.rate-limit.store` | `memory` (default) or `redis` (shared quota via Lua, fail-open to memory; `prod` default) |

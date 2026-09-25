@@ -71,10 +71,13 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
 
 ### Achados em aberto (não incluídos no subset)
 
-- CORS wildcard por omissão + API key opcional = API aberta por defeito.
+- ~~CORS wildcard por omissão~~ — **resolvido** (deny-by-default: base sem CORS,
+  `*` só no dev, prod fail-fast). API key opcional = escolha de demo, mantém-se.
 - PromptGuard contornável (heurístico, aceitável em demo — defence in depth).
-- Testes frágeis (`RagDefaultStoreTest` instanceof, `OpenApiDocsTest`).
-- Sem testes de concorrência do rate limiter nem de frases custom do guard.
+- ~~Testes frágeis (`RagDefaultStoreTest` instanceof, `OpenApiDocsTest`)~~ —
+  **resolvidos** (contrato "bean único, não-pgvector" + parse JSON do spec).
+- ~~Sem testes de concorrência do rate limiter nem de frases custom do guard~~ —
+  **resolvidos** (`RateLimitConcurrencyTest`, `PromptGuardTest`).
 - Fail-open Redis em multi-instância multiplica a taxa efectiva.
 
 ## 4. Validações
@@ -85,6 +88,7 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
 | E2E Redis + pgvector + Ollama na stack final (7 testes) | ciclo 3, upgrade | **7/7 verdes** |
 | `docker compose config --quiet`, `docker build .`, `git diff --check` | ciclo 3, upgrade | **verde** |
 | Trivy fs (7→1) e imagem (4→1; OS 0) | ciclo 3, upgrade | **1 advisory (mcp, waiver)** |
+| `./mvnw verify` (66 testes: +5) — achados §3 (CORS deny-by-default, testes) | pós-PR #12 | **BUILD SUCCESS** |
 | Testes de rate limit (`RateLimit*`, `ApiKeyRateLimitIsolation`, `RedisFallback`) | ciclo 2 | 5/5 verdes |
 | `SemanticCacheUnitTest` (7, incl. TTL) | ciclo 2 | verde |
 | `./mvnw verify` (59 testes) + JaCoCo | ciclo 1 (`8ddfc47`) | verde |

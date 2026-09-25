@@ -700,3 +700,29 @@ SO/OS packages e binário Go: 0. CI alterado para `exit-code: '1'` +
 | `docker build .` | OK (imagem 685 MB) |
 | Trivy fs / imagem | 1 achado (mcp, waiver) / 1 achado (mcp, waiver); OS 0 |
 | `git diff --check` | OK |
+
+---
+
+## 28. Achados §3/§4 do relatório: CORS deny-by-default e testes de robustez (25/09/2026)
+
+Lote limitado pós-PR #12 (aprovado), sem dependências novas:
+
+1. **CORS deny-by-default** — `app.cors.allowed-origins` passou de `*` a `""`
+   (perfil base não emite headers CORS: same-origin only). `CorsConfig` ignora o
+   registo quando a lista fica vazia; dev mantém `*` para demos de browser; prod
+   continua fail-fast (`CORS_ALLOWED_ORIGINS` obrigatório). `CorsConfigTest`
+   inverteu o contrato (preflight negado por omissão) e ganhou
+   `CorsWildcardConfiguredTest` (opt-in `*` sem credentials);
+   `CorsSpecificOriginTest` (allowlist + credentials) inalterado.
+2. **Testes menos frágeis** — `RagDefaultStoreTest` deixou deassertar
+   `isInstanceOf(SimpleVectorStore)` e passou a exigir contrato: exactamente 1
+   bean `VectorStore` e não-`PgVectorStore`; `OpenApiDocsTest` faz parse JSON do
+   spec (`openapi` + `paths./ai/chat`) em vez de string-contains.
+3. **Testes novos** — `RateLimitConcurrencyTest` (8 threads × 15 chamadas:
+   nunca gasta mais que capacidade + refill temporal de 1 token/s; toda a
+   rejeição vira 429) e `PromptGuardTest` (lista configurada substitui os
+   defaults, matching case-insensitive, blank/oversized sempre rejeitados).
+
+Fora de escopo (deliberado): heurísticas de bypass do `PromptGuard` (demo) e
+fail-open Redis em multi-instância (decisão arquitectónica). Validação:
+`./mvnw verify` **66/66** verdes, pisos JaCoCo 0.65/0.54 sem violações.
