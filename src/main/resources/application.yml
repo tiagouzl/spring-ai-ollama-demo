@@ -140,6 +140,11 @@ app:
     # substitute for a real guardrails layer). "you are now" is intentionally
     # absent: it false-positives on ordinary sentences; re-add it here if wanted.
     blocked-phrases: ignore previous instructions, ignore all previous instructions, ignore the system prompt, disregard all previous instructions, new system prompt
+    # Same blocklist applied to the model's answer before it reaches the client.
+    # A trip never fails the request: the answer is replaced with a redacted
+    # text prefixed "[output-guardrail]" and counted on
+    # app.security.outputguardrail.triggered. Empty list disables redaction.
+    output-blocked-phrases: ignore previous instructions, ignore all previous instructions, ignore the system prompt, disregard all previous instructions, new system prompt
   chat-memory:
     # Rows in SPRING_AI_CHAT_MEMORY older than this are purged hourly (and at
     # startup). 168 = 7 days; <= 0 disables the purge.
