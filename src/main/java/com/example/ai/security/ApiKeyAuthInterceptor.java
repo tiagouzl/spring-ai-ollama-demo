@@ -6,6 +6,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -52,6 +54,13 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
         // untouched — otherwise a browser's preflight for a protected endpoint
         // would be rejected with 401 before the real request is ever sent.
         if ("OPTIONS".equals(request.getMethod())) {
+            return true;
+        }
+        // OIDC mode: the security chain already authenticated this request as a
+        // JWT — the API key is not an additional requirement (spec R6: modes are
+        // exclusive; rate limiting still runs in the next interceptor).
+        if (SecurityContextHolder.getContext().getAuthentication()
+                instanceof JwtAuthenticationToken) {
             return true;
         }
         if (keyList.isEmpty()) {
