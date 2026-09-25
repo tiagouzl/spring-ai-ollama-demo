@@ -38,12 +38,17 @@ public class RagController {
 
     @GetMapping("/ai/rag/debug")
     public List<RagDebugDocument> debugGet(@RequestParam(value = "question", defaultValue = "What is RAG?") String question) {
-        return ragService.debugSearch(question);
+        return debug(question);
     }
 
     @PostMapping("/ai/rag/debug")
     public List<RagDebugDocument> debugPost(@Valid @RequestBody RagRequest request) {
-        return ragService.debugSearch(request.question());
+        return debug(request.question());
+    }
+
+    private List<RagDebugDocument> debug(String question) {
+        promptGuard.validate(question);
+        return ragService.debugSearch(question);
     }
 
     private ResponseEntity<RagAnswer> answer(String question) {
@@ -53,7 +58,7 @@ public class RagController {
         } catch (Exception e) {
             // Never leak exception messages to clients — log the detail server-side
             // and return a fixed, actionable hint instead.
-            log.warn("RAG request failed for question: {}", question, e);
+            log.warn("RAG request failed", e);
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(new RagAnswer("RAG is unavailable. Ensure Ollama is running and the embedding model is installed "
                             + "(ollama pull nomic-embed-text). Check the server logs for details.", List.of()));

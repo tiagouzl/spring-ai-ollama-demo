@@ -86,6 +86,19 @@ class SemanticCacheUnitTest {
     }
 
     @Test
+    void cacheIsIsolatedByClientNamespace() {
+        EmbeddingModel model = mock(EmbeddingModel.class);
+        when(model.embed(anyString())).thenReturn(allOnes());
+        SemanticCache cache = newCache(model);
+
+        cache.store("same question", "client A answer", "client-a");
+        cache.store("same question", "client B answer", "client-b");
+
+        assertThat(cache.lookup("same question", "client-a")).contains("client A answer");
+        assertThat(cache.lookup("same question", "client-b")).contains("client B answer");
+    }
+
+    @Test
     void orthogonalEmbeddingMissesCache() {
         EmbeddingModel model = mock(EmbeddingModel.class);
         when(model.embed("similar question")).thenReturn(allOnes());
@@ -113,6 +126,24 @@ class SemanticCacheUnitTest {
         assertThat(cache.size()).isEqualTo(3);
         // But every lookup resolves via similarity, not text equality.
         assertThat(cache.lookup("anything")).contains("answer C");
+    }
+
+    @Test
+    void expiredEntriesAreNotServed() throws InterruptedException {
+        EmbeddingModel model = mock(EmbeddingModel.class);
+        when(model.embed(anyString())).thenReturn(allOnes());
+        // ttl=1s: lookup must serve while fresh, then eagerly evict the entry
+        // before matching once it ages past the TTL — a stale answer must never
+        // be returned by the similarity loop.
+        SemanticCache cache = new SemanticCache(model, true, 0.95, 1, 1000, "memory",
+                new SimpleMeterRegistry(), null);
+
+        cache.store("aged question", "fresh answer");
+        assertThat(cache.lookup("aged question")).contains("fresh answer");
+
+        Thread.sleep(1100);
+        assertThat(cache.lookup("aged question")).isEmpty();
+        assertThat(cache.size()).isZero(); // eagerly dropped on read, not just hidden
     }
 
     @Test

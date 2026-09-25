@@ -6,6 +6,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +15,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,9 +37,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * Two backends, selected by {@code app.cache.semantic.store}:
  * <ul>
  *   <li>{@code memory} (default) — per-instance {@code ConcurrentHashMap};</li>
- *   <li>{@code redis} — entries as hashes ({@code semcache:{id}} →
- *       embedding/answer/timestamp) with the key TTL, so hits are shared across
- *       replicas. Any Redis failure <b>falls back to bypass</b> (the model is
+ *   <li>{@code redis} — entries as hashes
+ *       ({@code semcache:{clientFingerprint}:{id}} → embedding/answer/timestamp)
+ *       with the key TTL, so hits are shared across replicas without crossing
+ *       client namespaces. Any Redis failure <b>falls back to bypass</b> (the model is
  *       called normally).</li>
  * </ul>
  * </p>
@@ -46,7 +50,7 @@ public class SemanticCache {
 
     private static final Logger log = LoggerFactory.getLogger(SemanticCache.class);
 
-    record Entry(float[] embedding, String answer, Instant createdAt) {
+    record Entry(String namespace, float[] embedding, String answer, Instant createdAt) {
     }
 
     private final EmbeddingModel embeddingModel;
@@ -67,7 +71,8 @@ public class SemanticCache {
     private final StringRedisTemplate redisTemplate;
 
     private static final String KEY_PREFIX = "semcache:";
-    private static final String SEQ_KEY = "semcache:seq";
+    private static final String SEQ_PREFIX = "semcache:seq:";
+    private static final String LEGACY_NAMESPACE = "legacy";
 
     public SemanticCache(EmbeddingModel embeddingModel,
                          @Value("${app.cache.semantic.enabled:false}") boolean enabled,
@@ -99,13 +104,17 @@ public class SemanticCache {
      * Never throws — on any failure the cache is bypassed.
      */
     public Optional<String> lookup(String message) {
+        return lookup(message, LEGACY_NAMESPACE);
+    }
+
+    public Optional<String> lookup(String message, String namespace) {
         if (!enabled || message == null || message.isBlank()) {
             bypasses.increment();
             return Optional.empty();
         }
         if (redis) {
             try {
-                return redisLookup(message);
+                return redisLookup(message, namespace);
             } catch (Exception e) {
                 log.debug("[cache] redis lookup failed, bypassing: {}", e.getMessage());
                 bypasses.increment();
@@ -122,6 +131,9 @@ public class SemanticCache {
             Instant bestCreatedAt = Instant.MIN;
             String bestAnswer = null;
             for (Entry entry : cache.values()) {
+                if (!entry.namespace().equals(namespace)) {
+                    continue;
+                }
                 double similarity = cosine(query, entry.embedding());
                 // Strictly greater on similarity, but ties are broken by the
                 // most recent entry: two phrasings with identical embeddings
@@ -149,12 +161,16 @@ public class SemanticCache {
 
     /** Stores the answer for a message. Fail-safe: never throws. */
     public void store(String message, String answer) {
+        store(message, answer, LEGACY_NAMESPACE);
+    }
+
+    public void store(String message, String answer, String namespace) {
         if (!enabled || message == null || message.isBlank() || answer == null || answer.isBlank()) {
             return;
         }
         if (redis) {
             try {
-                redisStore(message, answer);
+                redisStore(message, answer, namespace);
             } catch (Exception e) {
                 log.debug("[cache] redis store failed, skipping: {}", e.getMessage());
             }
@@ -165,7 +181,7 @@ public class SemanticCache {
                 evict();
             }
             long id = nextId.incrementAndGet();
-            cache.put(id, new Entry(embeddingModel.embed(message), answer, Instant.now()));
+            cache.put(id, new Entry(namespace, embeddingModel.embed(message), answer, Instant.now()));
             log.debug("[cache] stored answer ({} entries)", cache.size());
         } catch (Exception e) {
             log.debug("[cache] store failed, skipping: {}", e.getMessage());
@@ -182,10 +198,11 @@ public class SemanticCache {
      * the memory scan) and picks the nearest by cosine, freshest on ties.
      * Corrupt or wrong-dimension entries are skipped (deleted when unreadable).
      */
-    private Optional<String> redisLookup(String message) {
+    private Optional<String> redisLookup(String message, String namespace) {
         float[] query = embeddingModel.embed(message);
-        var keys = redisTemplate.keys(KEY_PREFIX + "*");
-        if (keys == null || keys.isEmpty()) {
+        String entryPrefix = KEY_PREFIX + namespace + ":";
+        var keys = scan(entryPrefix + "*");
+        if (keys.isEmpty()) {
             misses.increment();
             return Optional.empty();
         }
@@ -222,19 +239,30 @@ public class SemanticCache {
         return Optional.empty();
     }
 
-    private void redisStore(String message, String answer) {
-        var keys = redisTemplate.keys(KEY_PREFIX + "*");
-        if (keys != null && keys.size() >= maxEntries) {
-            log.info("[cache] max entries reached, clearing {} entries", keys.size());
+    private void redisStore(String message, String answer, String namespace) {
+        String entryPrefix = KEY_PREFIX + namespace + ":";
+        var keys = scan(KEY_PREFIX + "*:*");
+        keys.removeIf(key -> key.startsWith(SEQ_PREFIX));
+        if (keys.size() >= maxEntries) {
+            log.info("[cache] global max entries reached, clearing {} entries", keys.size());
             redisTemplate.delete(keys);
         }
-        Long id = redisTemplate.opsForValue().increment(SEQ_KEY);
-        String key = KEY_PREFIX + id;
+        Long id = redisTemplate.opsForValue().increment(SEQ_PREFIX + namespace);
+        String key = entryPrefix + id;
         redisTemplate.opsForHash().putAll(key, Map.of(
                 "emb", encodeEmbedding(embeddingModel.embed(message)),
                 "ans", answer,
                 "ts", String.valueOf(Instant.now().toEpochMilli())));
         redisTemplate.expire(key, ttl);
+    }
+
+    private List<String> scan(String pattern) {
+        ScanOptions options = ScanOptions.scanOptions().match(pattern).count(100).build();
+        List<String> keys = new java.util.ArrayList<>();
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            cursor.forEachRemaining(keys::add);
+        }
+        return keys;
     }
 
     private static String encodeEmbedding(float[] v) {

@@ -29,7 +29,7 @@ public class ApiSecurityConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(apiKeyAuthInterceptor).addPathPatterns("/ai/**");
-        registry.addInterceptor(rateLimitInterceptor).addPathPatterns("/ai/**");
+        registry.addInterceptor(apiKeyAuthInterceptor).addPathPatterns("/ai/**").order(0);
+        registry.addInterceptor(rateLimitInterceptor).addPathPatterns("/ai/**").order(1);
     }
 }

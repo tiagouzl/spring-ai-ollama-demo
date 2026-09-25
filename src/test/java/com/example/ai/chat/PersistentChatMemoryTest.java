@@ -1,5 +1,6 @@
 package com.example.ai.chat;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -45,6 +46,11 @@ class PersistentChatMemoryTest {
         return new ChatResponse(List.of(new Generation(new AssistantMessage(content))));
     }
 
+    @BeforeEach
+    void clearMemory() {
+        jdbcTemplate.update("DELETE FROM SPRING_AI_CHAT_MEMORY");
+    }
+
     @Test
     void memoryMessagesArePersistedToJdbcRepository() {
         when(ollamaChatModel.call(any(Prompt.class)))
@@ -61,10 +67,14 @@ class PersistentChatMemoryTest {
         verify(ollamaChatModel, times(2)).call(any(Prompt.class));
 
         Integer storedMessages = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM SPRING_AI_CHAT_MEMORY", Integer.class);
+        Integer rawSessionRows = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = ?",
                 Integer.class, sessionId);
 
-        // 2 user messages + 2 assistant replies persisted for this conversation
-        assertThat(storedMessages).isGreaterThanOrEqualTo(4);
+        // 2 user messages + 2 assistant replies are stored under a derived,
+        // client-scoped 36-character conversation id, not the external token.
+        assertThat(storedMessages).isEqualTo(4);
+        assertThat(rawSessionRows).isZero();
     }
 }

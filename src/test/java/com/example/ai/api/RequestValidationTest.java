@@ -86,6 +86,22 @@ class RequestValidationTest {
     }
 
     @Test
+    void oversizedGetMessageIsRejectedWith400() {
+        ResponseEntity<String> response = rest.getForEntity(
+                "/ai/chat?message=" + "a".repeat(4001), String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("Bad request");
+        assertThat(response.getBody()).doesNotContain("message=");
+    }
+
+    @Test
+    void blankGetMessageIsRejectedWith400() {
+        ResponseEntity<String> response = rest.getForEntity(
+                "/ai/chat?message={message}", String.class, "   ");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
     void validMessageStillReachesTheModel() {
         when(ollamaChatModel.call(any(Prompt.class)))
                 .thenReturn(mockedResponse("valid request accepted"));
@@ -93,5 +109,6 @@ class RequestValidationTest {
         ResponseEntity<String> response = post("/ai/chat", "{\"message\":\"Hello\"}");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains("valid request accepted");
+        assertThat(response.getHeaders().getCacheControl()).contains("no-store");
     }
 }

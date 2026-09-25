@@ -28,6 +28,9 @@ spring:
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
+      # New in Alibaba 1.1.x: same eager api-key validation as the ones above —
+      # its spring.ai.model.embedding.multimodal selector defaults to dashscope.
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeMultimodalEmbeddingAutoConfiguration
   ai:
     # Persistent multi-turn chat memory (JdbcChatMemoryRepository backed by the
     # file-based HSQLDB above). 'always' + continueOnError: the schema is
@@ -97,7 +100,9 @@ app:
     # address) on /ai/** endpoints. <= 0 disables. Backends (app.rate-limit.store):
     # memory (default, per instance) or redis (shared across replicas via an
     # atomic Lua token bucket; any Redis failure falls back to memory).
-    # Redis itself is configured via spring.data.redis.* (host/port).
+    # Redis itself is configured via spring.data.redis.* (host/port). API keys
+    # are represented by SHA-256 fingerprints; raw credentials never enter
+    # memory buckets, Redis keys, or rejection logs.
     store: memory
     requests-per-minute: 60
   prompt-guard:
@@ -113,6 +118,8 @@ app:
       # every request costs tokens/CPU. Fail-safe: any error bypasses the cache.
       # Backends (app.cache.semantic.store): memory (default, per instance) or
       # redis (entries shared across replicas; any Redis failure bypasses).
+      # Entries are namespaced by a non-secret client fingerprint so one
+      # authenticated client's answers cannot be returned to another client.
       enabled: false
       store: memory
       # Cosine similarity required for a cache hit (identical text ≈ 1.0).

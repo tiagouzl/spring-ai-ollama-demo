@@ -502,7 +502,7 @@ tudo commitado, testado (56 testes) e com E2E reais verdes (Ollama, PG, Redis).
 1. **JaCoCo** — `prepare-agent` + `report` + `check` no `verify`; piso medido
    no dia (LINE 67%, BRANCH 54%), trava em 60%/45% com margem (sobe o mínimo
    quando a cobertura real subir).
-2. **Tiers** — `unit` (8 testes, sem Spring/Docker:
+2. **Tiers** — `unit` (13 testes, sem Spring/Docker:
    `-Dtest='*UnitTest,ProdAuthGuardTest'`) → `integration` (`verify` completo);
    E2E excluídos do default também via surefire (`**/e2e/**`, além do gate por
    env que já existia).
@@ -536,3 +536,167 @@ Primeiro boot de verdade com `SPRING_PROFILES_ACTIVE=prod` (app + ollama +
 metrics/prometheus 401 sem key e 200 com key; `/ai/chat` real (granite);
 `/ai/rag` grounded do pgvector com `sources`; meters custom no scrape;
 memória de chat com 2 rows em `spring_ai_chat_memory` no Postgres.
+
+---
+
+## 25. Auditoria completa e hardening (25/09/2026)
+
+A revisão cobriu arquitetura, API, segurança, corretude, configuração, CI,
+container, cobertura e documentação. O baseline antes das alterações passou com
+**50 testes, 0 falhas**; a suíte final desta rodada está registrada abaixo.
+
+### Correções aplicadas
+
+1. **Segredos fora de logs e Redis** — `ClientIdentity` transforma uma API key
+   válida em fingerprint SHA-256 depois da autenticação. Rate limit, cache e
+   memória passam a usar esse namespace; a chave bruta não aparece em Redis,
+   logs de 429 nem em identificadores de bucket.
+2. **Ordem de segurança explícita** — auth é o interceptor 0 e rate limit o 1;
+   requisições 401 não consomem quota. `ApiKeyRateLimitIsolationTest` trava essa
+   invariante e prova buckets independentes para chaves diferentes.
+3. **Isolamento de sessões e cache** — o `sessionId` externo é derivado com
+   UUIDv3 por namespace de cliente antes de chegar ao JDBC (limite real da coluna:
+   `VARCHAR(36)`). Entradas de cache ficam namespaced; no Redis, `KEYS` foi
+   removido em favor de `SCAN` não bloqueante.
+4. **Validação uniforme** — `PromptGuard` limita todo prompt a 4.000 caracteres,
+   rejeita blanks também em GET e cobre `/ai/rag/debug`, que antes ia direto ao
+   vector store. O `sessionId` GET tem o mesmo limite de 128 do POST.
+5. **Privacidade de erros e respostas** — `ApiError.path` usa apenas
+   `requestURI`, sem query string; o log de falha RAG não imprime a pergunta; e
+   todas as respostas `/ai/**` recebem `Cache-Control: no-store`.
+6. **Superfície local** — Docker Compose publica a aplicação apenas em
+   `127.0.0.1:8080`; exposição remota exige proxy TLS explícito.
+7. **Documentação corrigida** — o endpoint DashScope não faz fallback silencioso:
+   sem chave retorna 503 e erro do provedor retorna 502. O cache Redis usa
+   `SCAN`, e a documentação explica que API key identifica uma chave cliente,
+   não uma pessoa/usuário final.
+
+### Risco residual e decisão
+
+A auditoria de dependências identificou advisories HIGH/CRITICAL nos pins atuais
+(Boot 3.4.5, Spring AI 1.0.1, Alibaba 1.0.0.4, PostgreSQL driver transitivo).
+A Alibaba 1.0.0.4 declara Spring AI 1.0.1; Spring AI já possui correções 1.0.x,
+mas uma atualização parcial poderia quebrar o grafo de beans/APIs. Portanto,
+o Trivy continua **reporting-only** até a migração coordenada e coberta por
+`./mvnw verify` + E2E. Dependabot permanece semanal. O próximo passo de
+manutenção é testar o conjunto Boot/Spring AI/Alibaba em uma branch dedicada,
+não aplicar pins parciais no `main`.
+
+### Limitações explícitas
+
+- A API key é uma credencial de aplicação compartida. O namespace separa
+  clientes que usam chaves diferentes, mas não é autorização por usuário.
+  Para multiusuário real, migrar para Spring Security + OIDC/JWT e usar `sub`
+  como namespace de tenant/usuário.
+- GETs com prompt permanecem por compatibilidade didática; devem ser evitados em
+  produção porque URLs entram em histórico, proxy logs e traces. POST é o contrato
+  recomendado.
+- `PromptGuard` é heurístico, não um guardrail de segurança contra prompt
+  injection avançado.
+- `max-entries` continua sendo um teto aproximado no cache em memória; o modo
+  Redis faz `SCAN` e aplica o limite global sem bloquear o servidor.
+
+### Validação
+
+- `./mvnw -B test -Dtest='*UnitTest,ProdAuthGuardTest'` → **13 testes, 0 falhas**.
+- `./mvnw -B -DskipTests compile` → **BUILD SUCCESS**.
+- `docker compose config --quiet` → **CONFIG OK**.
+- `E2E_REDIS=true ./mvnw -B test -Dtest='SemanticCacheRedisE2EIT,RedisRateLimitE2EIT'` → **2 testes E2E com Redis real, 0 falhas**.
+- `./mvnw -B verify` → **59 testes, 0 falhas, 0 erros, 0 pulos**, gate JaCoCo verde.
+
+## 26. Matriz P0 de dependências (25/09/2026)
+
+Upgrade coordenado definido a partir dos ramos do Dependabot como entrada e
+validado contra os POMs/metadados oficiais do Maven Central.
+
+### Matriz escolhida
+
+| Componente | De | Para |
+|---|---|---|
+| Spring Boot parent | 3.4.5 | **3.5.16** |
+| `spring-ai.version` | 1.0.1 | **1.1.8** |
+| `spring-ai-alibaba.version` | 1.0.0.4 | **1.1.2.4-security-fix** |
+| Alibaba extensions BOM | — | **importar `spring-ai-alibaba-extensions-bom`** (mesma versão) |
+| JaCoCo | 0.8.12 | **0.8.15** (ramo Dependabot) |
+| Maven wrapper | 3.9.9 | **3.9.16** (ramo Dependabot) |
+| GH Actions | checkout@v4, setup-java@v4, trivy-action@0.28.0, codeql@v3 | **checkout@v7, setup-java@v6, trivy-action@0.36.0, codeql@v4** (ramos Dependabot) |
+| springdoc | 2.8.14 | manter; avaliar 2.9.1 após Boot 3.5 |
+| Testcontainers | 1.21.4 | manter (pin intencional) |
+| Docker JDK base | temurin 21-jre | manter (salto de JDK independente) |
+
+### Fontes de compatibilidade
+
+- POM do `spring-ai-alibaba-starter-dashscope:1.1.2.3` → construído contra
+  **Boot 3.5.10** e **Spring AI 1.1.2** (repo1.maven.org).
+- BOM `spring-ai-bom:1.1.8` → contém `spring-ai-advisors-vector-store`
+  (artifact id usado pelo projeto não muda de 1.0 → 1.1).
+- Metadados `spring-ai-alibaba-bom` → 1.1.2.4-security-fix é o mais recente da
+  linha 1.1 estável (2.0.0-M1.1 é milestone).
+- O `starter-dashscope` **saiu do BOM principal em 1.1.x** e passa a ser
+  gerido por `spring-ai-alibaba-extensions-bom` (verificado: presente em
+  1.1.2.3 e 1.1.2.4-security-fix).
+
+### Riscos de breaking change
+
+- Spring AI 1.0 → 1.1: APIs de advisors/memória podem ter mudado — decidido
+  pelos passos compile/test/verify.
+- Alibaba 1.1.x: dois BOMs a importar; `1.1.2.4-security-fix` é um release
+  atípico (BOM base reduzido) — validar resolução com `dependency:tree`.
+- springdoc 2.8.14 × Boot 3.5: validar com `OpenApiDocsTest`.
+
+### Alternativas rejeitadas
+
+- **Trio "latest" do Dependabot (Boot 4.1.1 + Spring AI 2.0.1 + Alibaba
+  1.1.2.3)**: inconsistente — Alibaba 1.1.x exige Boot 3.5/Spring AI 1.1; a
+  linha Alibaba para Boot 4 é só `2.0.0-M1.1` (milestone, excluído pelo plano);
+  Spring AI 2.0 renomeou `spring-ai-advisors-vector-store`.
+- **Conservador (Boot 3.4.13 + Spring AI 1.0.9 + Alibaba 1.0.0.4)**: fallback
+  se a matriz escolhida falhar; não resolve advisories do Alibaba 1.0.0.4.
+
+## 27. Advisories Trivy e resultados da validação (25/09/2026)
+
+Execução do plano §6.7 (Trivy local fs + imagem) após aplicar a matriz §26.
+
+### Advisories
+
+| Componente | CVE | Severidade | Versão corrigida | Decisão |
+|---|---|---|---|---|
+| `tomcat-embed-core` 10.1.55 | CVE-2026-65182, CVE-2026-65905, CVE-2026-68525 | CRITICAL/HIGH | 10.1.60 | **Resolvido** — property Boot `tomcat.version` (10.1.58 nunca foi publicada; 10.1.60 é o patch atual) |
+| `netty-codec`/`netty-handler` 4.1.135.Final | CVE-2026-59901, CVE-2026-75595 | HIGH/CRITICAL | 4.1.136/4.1.137.Final | **Resolvido** — property Boot `netty.version=4.1.138.Final` |
+| `postgresql` 42.7.11 | CVE-2026-54291 | HIGH | 42.7.12 | **Resolvido** — property Boot `postgresql.version` |
+| `opennlp-tools` 2.3.3 | CVE-2026-40682, CVE-2026-42027, CVE-2026-42440 | CRITICAL/HIGH | 2.5.9 | **Resolvido** — entrada em `dependencyManagement` (pinado por `spring-ai-alibaba-dashscope`; usado só no `SentenceSplitter`) |
+| `mcp-core` 0.18.3 | CVE-2026-35568 | HIGH | 1.0.0 (MCP SDK) | **Adiado** — pinado por `spring-ai-client-chat` 1.1.8 (latest da faixa); 0.x→1.x é major; a app não usa endpoints MCP. Waiver em `.trivyignore` até bump do Spring AI |
+| secret `data/ollama/id_ed25519` | — | HIGH | — | **Falso positivo local** — `data/` está no `.gitignore`; não existe no checkout do CI |
+
+**Resultado**: fs 7 achados → 1 (mcp, com waiver); imagem `app.jar` 4 → 1;
+SO/OS packages e binário Go: 0. CI alterado para `exit-code: '1'` +
+`ignore-unfixed: true` (passo 7 do plano).
+
+### Breaking changes encontrados e resolvidos
+
+1. **`DashScopeMultimodalEmbeddingAutoConfiguration` (nova na Alibaba 1.1.x)**
+   valida a API key no startup (`spring.ai.model.embedding.multimodal` com
+   `matchIfMissing=true`) → todos os `@SpringBootTest` falhavam sem
+   `DASHSCOPE_API_KEY`. Corrigido com `spring.autoconfigure.exclude` (mesmo
+   padrão das 8 autoconfigs DashScope já excluídas em `application.yml`).
+2. **`MessageChatMemoryAdvisor.Builder.conversationId(String)` removido em
+   Spring AI 1.1** → `NoSuchMethodError` em runtime (`MemoryChatController`).
+   Corrigido com o padrão 1.1.x: `builder(chatMemory).build()` + param
+   `ChatMemory.CONVERSATION_ID` via `.advisors(a -> a.param(...))`
+   (obrigatório — `BaseChatMemoryAdvisor` falha se o param não vier).
+3. Compilação incremental mascarou a quebra 2 (`mvn compile` sem `clean`);
+   todos os passes seguintes usaram `clean`.
+
+### Resultados da validação
+
+| Verificação | Resultado |
+|---|---|
+| `dependency:tree -Dscope=runtime` / `dependency:analyze` | BUILD SUCCESS, sem conflitos (só warning pré-existente de unused-declared) |
+| `./mvnw -B clean verify` | **61/61 verdes**, pisos JaCoCo 0.65/0.54 sem violações (3 execuções no total) |
+| E2E Redis (`SemanticCacheRedisE2EIT`, `RedisRateLimitE2EIT`) | 2/2 verdes na stack final |
+| E2E pgvector (`PgVectorE2EIT`) | 2/2 verdes |
+| E2E Ollama (`OllamaE2EIT`) | 3/3 verdes (qwen2:0.5b via Testcontainers) |
+| `docker compose config --quiet` | OK |
+| `docker build .` | OK (imagem 685 MB) |
+| Trivy fs / imagem | 1 achado (mcp, waiver) / 1 achado (mcp, waiver); OS 0 |
+| `git diff --check` | OK |

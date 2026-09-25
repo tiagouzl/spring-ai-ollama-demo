@@ -1,6 +1,7 @@
 package com.example.ai.config;
 
 import com.example.ai.api.ApiError;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -9,6 +10,7 @@ import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 
 import java.time.Instant;
@@ -70,7 +72,15 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String error, String message, WebRequest request) {
-        String path = request.getDescription(false).replace("uri=", "");
+        String path;
+        if (request instanceof ServletWebRequest servletWebRequest) {
+            HttpServletRequest servletRequest = servletWebRequest.getNativeRequest(HttpServletRequest.class);
+            path = servletRequest == null ? "" : servletRequest.getRequestURI();
+        } else {
+            // Defensive fallback for non-servlet WebRequest implementations. Never
+            // include the query string because it may contain prompts or session ids.
+            path = request.getDescription(false).replace("uri=", "").split("\\?", 2)[0];
+        }
         ApiError body = new ApiError(Instant.now(), status.value(), error, message, path);
         return ResponseEntity.status(status).body(body);
     }
