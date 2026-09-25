@@ -18,12 +18,15 @@ mais recente.
 - **Validação atual:** `./mvnw verify` verde com **61 testes, 0 falhas**, gate
   JaCoCo aprovado com pisos novos (0.60/0.45 → **0.65/0.54**; atuais medidos:
   LINE 67.1%, BRANCH 56.3%).
-- **Não concluído:** upgrade coordenado de dependências (nunca iniciado no POM),
-  E2E pgvector, gate Trivy bloqueante.
+- **Upgrade coordenado concluído** (§6.1–§6.7): Boot 3.4.5→**3.5.16**,
+  Spring AI 1.0.1→**1.1.8**, Alibaba 1.0.0.4→**1.1.2.4-security-fix**;
+  verify 61/61, E2E 7/7, Trivy 7→1 achado (advisory em waiver).
+  Matriz, breaking changes e advisories em `ANALISE.md` §26–§27.
 
 ## 2. Estado do repositório
 
-Working tree **limpa**; commits do ciclo 2 criados:
+Working tree **com alterações por commitar** (ciclo 3 — upgrade de
+dependências, não commitado à espera de autorização); commits do ciclo 2:
 
 | Commit | Mensagem |
 |---|---|
@@ -74,20 +77,23 @@ foi pushado); `origin/main` permanece em `e327778`; nenhum PR.
 
 | Validação | Quando | Resultado |
 |---|---|---|
-| `./mvnw verify` (61 testes, JaCoCo 0.65/0.54) | ciclo 2, agora | **BUILD SUCCESS** |
+| `./mvnw clean verify` ×3 com matriz nova (61 testes, JaCoCo 0.65/0.54) | ciclo 3, upgrade | **BUILD SUCCESS** (3×) |
+| E2E Redis + pgvector + Ollama na stack final (7 testes) | ciclo 3, upgrade | **7/7 verdes** |
+| `docker compose config --quiet`, `docker build .`, `git diff --check` | ciclo 3, upgrade | **verde** |
+| Trivy fs (7→1) e imagem (4→1; OS 0) | ciclo 3, upgrade | **1 advisory (mcp, waiver)** |
 | Testes de rate limit (`RateLimit*`, `ApiKeyRateLimitIsolation`, `RedisFallback`) | ciclo 2 | 5/5 verdes |
 | `SemanticCacheUnitTest` (7, incl. TTL) | ciclo 2 | verde |
 | `./mvnw verify` (59 testes) + JaCoCo | ciclo 1 (`8ddfc47`) | verde |
 | E2E Redis (`SemanticCacheRedisE2EIT`, `RedisRateLimitE2EIT`) | ciclo 1 | verde |
-| `docker compose config`, `git diff --check`, `graft build` | ciclo 1 | verde |
-| E2E pgvector (`E2E_PG=true … PgVectorE2EIT`) | — | **pendente** |
+| `graft build` | ciclo 1 | verde |
 
 ## 5. Riscos residuais
 
-- **Dependências**: advisories HIGH/CRITICAL nos pins actuais (Boot 3.4.5 /
-  Spring AI 1.0.1 / Alibaba 1.0.0.4 / driver PostgreSQL transitivo); upgrade
-  deve ser coordenado — Alibaba 1.0.0.4 foi construído sobre Spring AI 1.0.1.
-- **Trivy**: `exit-code: '0'` no CI (reporting-only) até o upgrade ser validado.
+- **Dependências**: matriz P0 aplicada e validada (ANALISE §26); advisories
+  corrigíveis resolvidas e restantes justificadas (ANALISE §27). Residual:
+  `mcp-core` 0.18.3 (CVE-2026-35568) até o Spring AI subir o MCP SDK —
+  endpoints MCP não usados pela app, waiver documentado em `.trivyignore`.
+- **Trivy**: `exit-code: '1'` no CI (bloqueante) + `ignore-unfixed`.
 - **Auth**: API key partilhada por aplicação; multiusuário real exige
   OIDC/JWT com namespace por `sub`.
 - **GETs com prompts**: mantidos por didáctica; POST é o contrato de produção.
@@ -95,7 +101,7 @@ foi pushado); `origin/main` permanece em `e327778`; nenhum PR.
 
 ## 6. Próximos passos
 
-### P0 — Upgrade coordenado de dependências
+### P0 — Upgrade coordenado de dependências (**concluído** — ver `ANALISE.md` §26–§27)
 
 1. Consultar metadados Maven oficiais (Boot, Spring AI, Alibaba, springdoc) e
    escolher uma matriz compatível; registar matriz, fontes, riscos e
@@ -134,14 +140,16 @@ foi pushado); `origin/main` permanece em `e327778`; nenhum PR.
 
 ## 7. Definição de pronto
 
-- [ ] matriz de versões documentada no `ANALISE.md`
-- [ ] POM actualizado sem conflitos ou pins parciais
-- [ ] `mvn verify` verde (61+ testes, pisos JaCoCo actuais)
-- [ ] E2E Redis verde
-- [ ] E2E pgvector verde
-- [ ] advisories corrigíveis resolvidas ou justificadas
-- [ ] Trivy bloqueante (`exit-code: '1'`)
-- [ ] README e ANALISE sincronizados
-- [ ] code review sem achados críticos
+- [x] matriz de versões documentada no `ANALISE.md` (§26)
+- [x] POM actualizado sem conflitos ou pins parciais
+- [x] `mvn verify` verde (61 testes, pisos JaCoCo 0.65/0.54)
+- [x] E2E Redis verde (2/2, stack final)
+- [x] E2E pgvector verde (2/2)
+- [x] E2E Ollama verde (3/3, stack final)
+- [x] advisories corrigíveis resolvidas ou justificadas (`ANALISE.md` §27)
+- [x] Trivy bloqueante (`exit-code: '1'` + `.trivyignore`)
+- [x] README e ANALISE sincronizados
+- [x] code review sem achados críticos (Standards + Spec; só smells de juízo e
+      achados históricos fora do diff do upgrade)
 - [x] quatro commits do ciclo 2 criados e pushados (§6.10, `7bcd5db`…`58d888f`)
 - [x] nenhum push sem autorização

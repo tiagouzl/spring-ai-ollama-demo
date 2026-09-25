@@ -14,7 +14,7 @@ It started as a small demo to get `ChatClient` running against a local model and
 
 ## Highlights
 
-Spring Boot 3.4 + Spring AI 1.0.1 + Spring AI Alibaba 1.0.0.4, built around the fluent `ChatClient` API. Runs 100% local and free by default via Ollama — no API key needed. Setting `DASHSCOPE_API_KEY` enables the dedicated DashScope endpoint; generic `/ai/chat` deliberately remains on Ollama, and DashScope failures surface as errors rather than silent fallback responses.
+Spring Boot 3.5 + Spring AI 1.1.8 + Spring AI Alibaba 1.1.2.4-security-fix, built around the fluent `ChatClient` API. Runs 100% local and free by default via Ollama — no API key needed. Setting `DASHSCOPE_API_KEY` enables the dedicated DashScope endpoint; generic `/ai/chat` deliberately remains on Ollama, and DashScope failures surface as errors rather than silent fallback responses.
 
 Endpoints cover the usual patterns: streaming (SSE via `ChatClient.stream()`), multi-turn chat with per-conversation memory, function calling / tool use with `@Tool`, structured (typed) output via `ChatClient.entity()`, and RAG with `SimpleVectorStore` + `TokenTextSplitter` chunking + `nomic-embed-text` embeddings — no external vector DB required.
 
@@ -27,8 +27,8 @@ On the operational side: Bean Validation on all POST bodies, structured `ApiErro
 | Layer     | Technology                                    |
 |-----------|-----------------------------------------------|
 | Language  | Java 21 (LTS)                                 |
-| Framework | Spring Boot 3.4.5                             |
-| AI SDK    | Spring AI 1.0.1 + Spring AI Alibaba 1.0.0.4   |
+| Framework | Spring Boot 3.5.16                            |
+| AI SDK    | Spring AI 1.1.8 + Spring AI Alibaba 1.1.2.4-security-fix |
 | Model (local) | Ollama — `granite4.1:3b` + `nomic-embed-text` |
 | Model (cloud) | Alibaba DashScope — `qwen-plus` (optional) |
 | Vector Store | `SimpleVectorStore` (in-memory, no DB; embeddings persisted to `./data`) |
@@ -471,9 +471,9 @@ E2E_PG=true ./mvnw test -Dtest=PgVectorE2EIT -DfailIfNoTests=false
 
 ### CI / Testing
 
-- `./mvnw -B test -Dtest='*UnitTest,ProdAuthGuardTest'` — 13 fast tests, no Spring, no Docker (`unit` job)
-- `./mvnw -B verify` — full suite (59 tests, Spring + mocked models) with JaCoCo gate (LINE ≥ 60%, BRANCH ≥ 45%; raise the floor when coverage grows) (`integration` job)
-- Trivy FS scan (HIGH/CRITICAL → SARIF; currently reporting-only during the coordinated framework upgrade) + Dependabot (maven/docker/actions, weekly)
+- `./mvnw -B test -Dtest='*UnitTest,ProdAuthGuardTest'` — 14 fast tests, no Spring, no Docker (`unit` job)
+- `./mvnw -B verify` — full suite (61 tests, Spring + mocked models) with JaCoCo gate (LINE ≥ 65%, BRANCH ≥ 54%) (`integration` job)
+- Trivy FS scan (HIGH/CRITICAL → SARIF, blocking via `exit-code: '1'` + `ignore-unfixed`, known advisories waived in `.trivyignore` — see `ANALISE.md` §27) + Dependabot (maven/docker/actions, weekly)
 - All controllers covered: simple chat, streaming, memory, tools, structured output, RAG (+ debug DTO and sanitized 503), Alibaba fallback + 502, request validation + prompt guard, persistent memory, observability, API-key auth, rate limiting, semantic cache, OpenAPI docs
 - GitHub Actions: `.github/workflows/ci.yml` runs on PR + push to `main`
 
