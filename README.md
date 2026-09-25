@@ -217,7 +217,7 @@ export APP_API_KEY=secret123
 curl -H "X-API-Key: secret123" "http://localhost:8080/ai/chat?message=Hello"   # 200
 curl "http://localhost:8080/ai/chat?message=Hello"                             # 401 Unauthorized
 
-# 2) Rate limiting — 60 requests/min per client by default (app.rate-limit.requests-per-minute).
+# 2) Rate limiting — 60 requests/min per client and endpoint by default (app.rate-limit.requests-per-minute).
 #    Exceeding it returns 429 Too Many Requests with a Retry-After header. Buckets
 #    use a SHA-256 fingerprint of a valid API key, otherwise a fingerprint of the
 #    remote address; raw credentials are never persisted or logged.

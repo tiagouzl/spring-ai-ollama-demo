@@ -155,7 +155,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         rejected.increment();
         response.setHeader("Retry-After", retryAfter);
         ApiErrorWriter.write(response, objectMapper, 429, "Rate limit exceeded",
-                "Too many requests. Limit: " + capacity + " per minute per client.", request);
+                "Too many requests. Limit: " + capacity + " per minute per client and endpoint.", request);
         return false;
     }
 
@@ -183,6 +183,8 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     }
 
     private String clientKey(HttpServletRequest request) {
-        return ClientIdentity.namespaceFor(request);
+        // Keyed per client AND endpoint: otherwise one busy endpoint exhausts
+        // the whole client quota and starves every other endpoint.
+        return ClientIdentity.namespaceFor(request) + ":" + request.getRequestURI();
     }
 }
