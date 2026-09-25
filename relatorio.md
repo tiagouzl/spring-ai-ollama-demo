@@ -105,9 +105,13 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
 - **Auth**: API key partilhada por aplicação; multiusuário real exige
   OIDC/JWT com namespace por `sub`.
 - **GETs com prompts**: mantidos por didáctica; POST é o contrato de produção.
-- **Prompt guard**: blocklist heurística de input (8 call sites) **e** guardrail
-  de output dedicado no seam do `ChatModel` (`ANALISE.md` §34) — ambos
-  heurísticos, não substituem uma camada de guardrails de produção.
+- **Prompt guard**: blocklist heurística de input (8 call sites), guardrail de
+  output no seam do `ChatModel` (`ANALISE.md` §34) e juíz semântico opcional
+  atrás de flag (`ANALISE.md` §35) — a blocklist é contornável; o juíz
+  semântico fecha parte da lacuna mas é falível nos dois sentidos.
+- **Boot 4 / Spring AI 2**: reavaliado em `ANALISE.md` §35 — alcançável apenas
+  com Alibaba `2.0.0-M1.1` (milestone sobre Spring AI 2.0.0-M1); decisão de não
+  subir, a rever quando existir release Alibaba alinhada com o Spring AI 2 GA.
 
 ## 6. Próximos passos
 

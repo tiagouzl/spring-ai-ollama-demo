@@ -16,7 +16,7 @@ entrypoints:
   - src/main/java/com/example/ai/security/OidcSecurityConfig.java
   - src/main/java/com/example/ai/security/PromptGetGuardFilter.java
   - src/main/java/com/example/ai/security/ClientIdentity.java
-last_verified_commit: 15e87402ca9db5a8abbf4c272bb8770a74fc2c27
+last_verified_commit: b6a0f80308ae4e6e6fd1aad5881226fa5a2082d6
 status: active
 ---
 
@@ -47,6 +47,7 @@ status: active
   are mutually exclusive credentials;   `ActuatorApiKeyFilter` is not registered;
   `ProdAuthGuard` accepts `OIDC_ISSUER_URI` instead of a key.
 - **Output guardrail** (`app.prompt-guard.output-blocked-phrases`, default = input list, empty = off): a trip never fails the request — the answer is replaced with the stable `"[output-guardrail] …"` text (200) and counted on `app.security.outputguardrail.triggered`; streaming is aggregated and re-emitted as a single event so no violating text can leak. Textual content only; a fixed blocklist is a first line of defence, not a guardrails layer.
+- **Semantic guardrail** (`app.guardrails.semantic.enabled=false`, `timeout=5s`, `policies`): second stage, an LLM judge over question+answer+policies, run only after the blocklist misses. OFF by default (one extra model call per answer). It **fails open** — timeout/exception/unparseable verdict ⇒ answer served, counted on `app.guardrails.semantic.errors`; trips on `.triggered`. Its meters only exist while enabled, so the default Prometheus scrape is unchanged. The judge is built from the raw delegate and must never be given the guarded model (recursion).
 
 ## Extension points
 
@@ -58,3 +59,4 @@ status: active
 - Rate limiting fails open per request when Redis is down (by design, accepted finding) and does not coordinate across instances in the memory store.
 - `PromptGuard` (input) and `OutputGuardrail` (output) are both heuristic — accepted demo-grade bypasses exist; a real guardrails layer is still open P2. The input guard is applied per call site (drifts); the output guardrail is applied at the model seam (cannot drift).
 - `ChatModelGuardrailBeanPostProcessor` must keep resolving its guardrail through `ObjectProvider` — constructor injection creates the `MeterRegistry` before its binders and silently drops JVM meters from the Prometheus scrape (see the lesson doc).
+- The semantic judge must be constructed from the model's **raw delegate**, never injected as a bean with a `ChatModel` — that hands it the guarded model and every verdict re-enters the guardrail.

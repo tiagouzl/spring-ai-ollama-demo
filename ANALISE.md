@@ -830,7 +830,8 @@ histórico velho; o cliente não tinha como apagar a memória de uma sessão.
 - **Validação**: `./mvnw verify` **86/86** verdes, JaCoCo 0.65/0.54 sem violações.
 
 O relatorio §6/P2 fica só com guardrails dedicados (+ reavaliação
-Boot 4 / Spring AI 2 bloqueada no Alibaba).
+Boot 4 / Spring AI 2 — ver §35: desbloqueada **apenas em milestone**
+Alibaba, decisão adiada).
 
 ---
 
@@ -877,4 +878,44 @@ sendo aplicado em 8 call sites, cada um um ponto de fuga.
   fixa contornável por reformulação — primeira linha de defesa, não camada de
   guardrails de produção.
 - `./mvnw -B verify` **129/129** verdes (+15 testes), JaCoCo LINE ≥ 65% /
+  BRANCH ≥ 54% sem violações.
+
+## 35. Guardrail semântico (LLM-as-juiz) + reavaliação Boot 4 (25/09/2026)
+
+Fecha a última dívida de guardrails (a blocklist é contornável por
+reformulação) e actualiza o estado do bloqueio Boot 4 / Spring AI 2.
+
+### Guardrail semântico
+
+- **Opt-in**: `app.guardrails.semantic.enabled=false` (default off — o
+  invariante do repo), `.timeout=5s`, `.policies` (3 por omissão). Activar
+  custa **uma chamada extra ao modelo por resposta**.
+- **Mecanismo**: `SemanticGuardrailJudge` pergunta ao mesmo modelo local se a
+  resposta viola as políticas (pergunta + resposta + políticas no prompt),
+  veredict de uma palavra (`sim`/`não`/`yes`/`no`).
+- **Cadeia**: blocklist primeiro (gratuito e determinístico); o juiz só julga
+  o que a lista não apanha. Prefixo de redigida inalterado
+  (`[output-guardrail]`) ⇒ um só contrato para o cliente.
+- **Fail-open deliberado**: timeout, excepção ou veredicto não parseável
+  devolvem "sem violação" e incrementam `app.guardrails.semantic.errors` — perda
+  de protecção é alerta; app bloqueado não é.
+- **Sem recursão**: o juiz é construído com o *delegate cru* do modelo, nunca
+  com o modelo já guardado. Meters semânticos só existem quando ligado
+  (default = scrape do Prometheus inalterado).
+- **Limites (aceites)**: veredicto de um modelo pequeno é falível nos dois
+  sentidos (falso positivo bloqueia uma resposta boa); não há histórico de
+  conversa; latência extra por resposta quando ligado.
+
+### Reavaliação Boot 4 / Spring AI 2 (spike, sem código)
+
+- Spring AI **2.0.0 GA** (12/06/2026) + 2.0.1 exige **Boot 4.0/4.1**.
+- Alibaba `spring-ai-alibaba` mais recente: **`2.0.0-M1.1`**, construído sobre
+  Spring AI 2.0.0-**M1** e Boot 4.0.0 — ou seja, **milestone sobre milestone**;
+  não há release Alibaba alinhada com o Spring AI 2 GA.
+- **Decisão: não subir agora.** O único ganho seria fechar o CVE residual do
+  `mcp-core` (MCP SDK 2.0.0 vem com o Spring AI 2.0.x) e a app não usa
+  endpoints MCP; o custo seria um Alibaba milestone no módulo DashScope — a
+  peça que já deu problemas de auto-config. Rever quando a Alibaba publicar
+  release alinhada com o 2.0 GA.
+- `./mvnw -B verify` **142/142** verdes (+13 testes), JaCoCo LINE ≥ 65% /
   BRANCH ≥ 54% sem violações.
