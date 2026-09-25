@@ -15,7 +15,7 @@ entrypoints:
   - src/main/java/com/example/ai/security/ApiSecurityConfig.java
   - src/main/java/com/example/ai/security/PromptGetGuardFilter.java
   - src/main/java/com/example/ai/security/ClientIdentity.java
-last_verified_commit: fb35dd41688c884c80db0dd079db6a6d55320be8
+last_verified_commit: 0ac753777d23549cbfe024fe0ae3137200d3dd0f
 status: active
 ---
 
