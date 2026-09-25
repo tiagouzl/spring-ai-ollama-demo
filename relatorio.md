@@ -25,8 +25,11 @@ mais recente.
 
 ## 2. Estado do repositório
 
-Working tree **com alterações por commitar** (ciclo 3 — upgrade de
-dependências, não commitado à espera de autorização); commits do ciclo 2:
+Working tree **limpa**; ciclos 1–3 mergeados em `main` via **PR #12**
+(merge commit `c7ba86c`); branch `chore/dependency-security-upgrade`
+removida após o merge. Todos os pushes foram autorizados explicitamente.
+
+Commits do ciclo 2 (agora na história de `main`):
 
 | Commit | Mensagem |
 |---|---|
@@ -35,8 +38,9 @@ dependências, não commitado à espera de autorização); commits do ciclo 2:
 | `4938132` | test: lock semantic cache TTL eviction |
 | `58d888f` | build: raise jacoco floor to 0.65/0.54 |
 
-Push do branch apenas mediante autorização explícita (o ciclo 2 até `58d888f`
-foi pushado); `origin/main` permanece em `e327778`; nenhum PR.
+Ciclo 3 (upgrade): `5a76470` (build), `d02b247` (docs), `becbb89`
+(lições de memória), `cd6217c` (tag `v0.36.0` do trivy-action — apanhada
+pelo CI do PR; `0.36.0` sem prefixo não existe).
 
 ## 3. Ciclo 2 — Revisão e correções aplicadas
 
