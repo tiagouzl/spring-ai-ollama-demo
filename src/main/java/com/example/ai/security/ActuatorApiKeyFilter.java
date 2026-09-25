@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -23,8 +24,13 @@ import java.io.IOException;
  * /actuator/metrics} stayed 200 with no key. Filters run before routing, so
  * this covers every handler mapping by construction.
  * </p>
+ * <p>
+ * In OIDC mode this filter is not registered — the OIDC actuator chain
+ * (order 2) protects these endpoints instead (spec R6).
+ * </p>
  */
 @Component
+@ConditionalOnProperty(name = "app.oidc.enabled", havingValue = "false", matchIfMissing = true)
 public class ActuatorApiKeyFilter extends OncePerRequestFilter {
 
     private final String apiKeys;

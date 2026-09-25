@@ -143,6 +143,24 @@ public class OidcSecurityConfig {
     }
 
     /**
+     * OIDC chain (spec §3 chain 2): /actuator/metrics and /actuator/prometheus
+     * require a valid Bearer JWT in OIDC mode; health stays public via the
+     * fallback chain (order 3). Conditional — only active when app.oidc.enabled=true.
+     */
+    @Bean
+    @Order(2)
+    @ConditionalOnProperty(name = "app.oidc.enabled", havingValue = "true")
+    SecurityFilterChain oidcActuatorSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+        return http.build();
+    }
+
+    /**
      * Always-on fallback (spec §3 chain 3): catches every request the
      * conditional OIDC chains don't match, and in default mode is the ONLY
      * chain — permitAll + CSRF off + stateless reproduces the pre-Spring-Security
