@@ -38,6 +38,11 @@ status: active
 - Everything under `/ai/**` is key-checked and rate-limited when keys are configured; actuator is covered by a separate filter.
 - A client namespace is stable per key (or per IP when anonymous) — a session id from one namespace never aliases another's memory or cache entries.
 - CORS never reflects origins unless explicitly configured.
+- **OIDC mode** (`app.oidc.enabled=true`): three ordered chains
+  (`@Order 1` `/ai/**` → `2` metrics/prometheus → `3` fallback `permitAll`,
+  CSRF off, stateless); namespace = `jwt:issuer:azp|-:sub`; API key and JWT
+  are mutually exclusive credentials; `ActuatorApiKeyFilter` is not registered;
+  `ProdAuthGuard` accepts `OIDC_ISSUER_URI` instead of a key.
 
 ## Extension points
 

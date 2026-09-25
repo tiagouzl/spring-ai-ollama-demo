@@ -829,5 +829,28 @@ histórico velho; o cliente não tinha como apagar a memória de uma sessão.
   (`keyB` apaga → nada muda; `keyA` apaga → histórico some).
 - **Validação**: `./mvnw verify` **86/86** verdes, JaCoCo 0.65/0.54 sem violações.
 
-O relatorio §6/P2 fica só com OIDC/JWT e guardrails dedicados (+ reavaliação
+O relatorio §6/P2 fica só com guardrails dedicados (+ reavaliação
 Boot 4 / Spring AI 2 bloqueada no Alibaba).
+
+---
+
+## 33. Modo OIDC/JWT com identidade do principal (25/09/2026)
+
+Fecha a dívida do README ("Full OIDC / JWT auth via Spring Security") —
+spec `docs/superpowers/specs/2026-09-25-oidc-jwt-resource-server-design.md` (v4).
+
+- **Modo por propriedade**: `app.oidc.enabled=true` (+ `app.oidc.issuer-uri`,
+  `app.oidc.allowed-audiences`) activa resource-server; default = exactamente
+  o comportamento anterior (3 cadeias com `@Order` fixo: OIDC `/ai/**`,
+  OIDC actuator, fallback `permitAll` stateless sem CSRF).
+- **Identidade**: namespace = SHA-256 de `jwt:<issuer>:<azp|-:<sub>` em
+  `ClientIdentity` — rate-limit, cache semântico e conversas passam a ser por
+  principal; o interceptor de API key aceita JWTs (modos mutuamente exclusivos).
+- **Validação**: issuer + allow-list `aud`/`azp` + `sub` não-vazio; decoder
+  próprio (`public-key-location` em CI sem rede, discovery no E2E).
+- **Actuator**: metrics/prometheus exigem JWT no modo OIDC; health público;
+  `ActuatorApiKeyFilter` inerte nesse modo.
+- **Operacional**: Keycloak pinado no compose (healthcheck, issuer na rede
+  docker `http://keycloak:8080`, porta 8081 publicada), realm em
+  `infra/keycloak/realm-export.json`, E2E black-box opt-in `KeycloakE2EIT`.
+- **R1–R9** cobertos pelos testes; `./mvnw -B verify` **114/114** verdes, JaCoCo LINE ≥ 65% / BRANCH ≥ 54% sem violações.

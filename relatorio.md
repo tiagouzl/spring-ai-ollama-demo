@@ -141,7 +141,7 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
 
 ### P2 — Evoluções futuras
 
-- OIDC/JWT por usuário (Spring Security, namespace por `sub`/`tenant`).
+- ~~OIDC/JWT por usuário (Spring Security, namespace por `sub`/`tenant`).~~ — feito (identidade do principal via OIDC/JWT; ver `docs/superpowers/specs/2026-09-25-oidc-jwt-resource-server-design.md` e `ANALISE.md` §33).
 - ~~Restringir prompts a POST em produção~~ — feito (`app.post-only-prompts` + `PromptGetGuardFilter`; `ANALISE.md` §29).
 - ~~Exclusão de conversas~~ — feita (`DELETE /ai/chat/memory/{sessionId}`; bulkhead e TTL antes, `ANALISE.md` §30–§32).
 - Guardrails dedicados de entrada/saída além do `PromptGuard`.
