@@ -8,6 +8,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.UUID;
 
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+
 /**
  * Derives stable, non-secret client identifiers for rate-limit buckets,
  * semantic-cache namespaces, and conversation namespaces.
@@ -28,6 +32,15 @@ public final class ClientIdentity {
     }
 
     public static String namespaceFor(HttpServletRequest request) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
+            Jwt jwt = jwtAuthentication.getToken();
+            String issuer = jwt.getIssuer() == null ? "-" : jwt.getIssuer().toString();
+            String azp = jwt.getClaimAsString("azp");
+            String azpSegment = (azp == null || azp.isBlank()) ? "-" : azp;
+            String sub = jwt.getSubject() == null ? "-" : jwt.getSubject();
+            return fingerprint("jwt:" + issuer + ":" + azpSegment + ":" + sub);
+        }
         Object authenticated = request.getAttribute(ATTRIBUTE);
         if (authenticated instanceof String fingerprint && !fingerprint.isBlank()) {
             return fingerprint;
