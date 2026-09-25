@@ -776,3 +776,33 @@ só limita a janela por conversa, não o armazenamento).
   cada teste instancia o purge à mão (linhas de 8 dias somem, de 1 dia ficam;
   `0` não apaga nada).
 - **Validação**: `./mvnw verify` **77/77** verdes, JaCoCo 0.65/0.54 sem violações.
+
+---
+
+## 31. Bulkhead de concorrência no LLM (25/09/2026)
+
+Fecha "bulkhead de concorrência" do relatorio §6/P2 — sem ele, uma rajada de
+pedidos acumula threads Tomcat (200) durante os 180s de read timeout cada,
+enquanto o Ollama enfileira em silêncio.
+
+- **Propriedade** `app.llm.max-concurrent` — default `4` (ON); `<= 0`
+  desactiva (pass-through).
+- **`config/ConcurrentBulkheadChatModel implements ChatModel`** — decorator
+  com `Semaphore` (fair): `call` faz `tryAcquire` imediato e liberta em
+  `finally`; `stream` adquire em `Flux.defer` (subscrição) e liberta em
+  `doFinally` (terminação/cancelamento — SSE nunca fica com permit agarrado).
+- **Ponto único de aplicação**: `PrimaryChatClientConfig.chatClientBuilder`
+  (o `@Primary ChatClient.Builder`) — cobre chat, stream, memory, tools,
+  structured, RAG e o fallback Ollama do Alibaba sem tocar em controllers;
+  `@MockitoBean OllamaChatModel` continua funcional (o decorator delega).
+- **Rejeição**: `LlmBulkheadFullException` → `GlobalExceptionHandler` →
+  **429** com `ApiError` ("The model is at capacity (app.llm.max-concurrent)").
+- **Testes** (5 novos): `ConcurrentBulkheadChatModelTest` (4 unit: fail-fast
+  no limite, libertação pós-stream, erro em stream quando cheio, `<= 0`
+  ilimitado) + `LlmBulkheadTest` (HTTP com mock bloqueado por latch: um 200,
+  o concorrente 429).
+- **Decisão**: app-side em vez de só `OLLAMA_NUM_PARALLEL` — o knob do Ollama
+  protege o servidor, mas não dá fast-fail no cliente nem cobre proxies
+  remotos; o bulkhead é o padrão didáctico da stack (rate-limit, timeouts).
+  DashScope fica de fora (API remota com limites próprios).
+- **Validação**: `./mvnw verify` **82/82** verdes, JaCoCo 0.65/0.54 sem violações.

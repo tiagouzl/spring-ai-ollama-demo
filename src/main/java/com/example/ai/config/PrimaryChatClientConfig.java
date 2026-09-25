@@ -3,6 +3,7 @@ package com.example.ai.config;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -32,9 +33,15 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class PrimaryChatClientConfig {
 
+    private final int maxConcurrent;
+
+    public PrimaryChatClientConfig(@Value("${app.llm.max-concurrent:4}") int maxConcurrent) {
+        this.maxConcurrent = maxConcurrent;
+    }
+
     @Bean
     @Primary
     public ChatClient.Builder chatClientBuilder(@Qualifier("ollamaChatModel") ChatModel ollamaChatModel) {
-        return ChatClient.builder(ollamaChatModel);
+        return ChatClient.builder(new ConcurrentBulkheadChatModel(ollamaChatModel, maxConcurrent));
     }
 }

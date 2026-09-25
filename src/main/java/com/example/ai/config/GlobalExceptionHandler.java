@@ -64,6 +64,13 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.GATEWAY_TIMEOUT, "Model timeout", "The model took too long to respond. Try again or use a shorter prompt.", request);
     }
 
+    @ExceptionHandler(LlmBulkheadFullException.class)
+    public ResponseEntity<ApiError> handleLlmBusy(LlmBulkheadFullException ex, WebRequest request) {
+        log.warn("Bulkhead: {}", ex.getMessage());
+        return build(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests",
+                "The model is at capacity (app.llm.max-concurrent). Retry shortly.", request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex, WebRequest request) {
         // Log full stack server-side; never expose raw exception messages to clients.

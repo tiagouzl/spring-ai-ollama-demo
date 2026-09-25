@@ -18,7 +18,7 @@ Spring Boot 3.5 + Spring AI 1.1.8 + Spring AI Alibaba 1.1.2.4-security-fix, buil
 
 Endpoints cover the usual patterns: streaming (SSE via `ChatClient.stream()`), multi-turn chat with per-conversation memory, function calling / tool use with `@Tool`, structured (typed) output via `ChatClient.entity()`, and RAG with `SimpleVectorStore` + `TokenTextSplitter` chunking + `nomic-embed-text` embeddings — no external vector DB required.
 
-On the operational side: Bean Validation on all POST bodies, structured `ApiError` responses that never leak internals, explicit HTTP timeouts on the Ollama client, Actuator + Prometheus observability, JDBC-backed chat memory and a persisted vector store (both survive restarts), an opt-in semantic cache, OpenAPI/Swagger UI, and optional API-key auth / rate limiting / prompt-injection guard. Docker Compose brings up Ollama and the app together with the models pulled automatically.
+On the operational side: Bean Validation on all POST bodies, structured `ApiError` responses that never leak internals, explicit HTTP timeouts and a concurrency bulkhead (429 when the model is saturated) on the Ollama client, Actuator + Prometheus observability, JDBC-backed chat memory and a persisted vector store (both survive restarts), an opt-in semantic cache, OpenAPI/Swagger UI, and optional API-key auth / rate limiting / prompt-injection guard. Docker Compose brings up Ollama and the app together with the models pulled automatically.
 
 ---
 
@@ -428,6 +428,7 @@ app:
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
 | `app.post-only-prompts` | `false` (default, demo keeps GET convenience) or `true` (prod): GET `/ai/**` carrying `message`/`question` answers 405 — prompts travel in POST bodies, never in URLs (logs/proxy/history). Prompt-free GETs (`/ai/session`, `/ai/alibaba/status`, `/ai/chat/memory`) and all POSTs are untouched |
 | `app.chat-memory.ttl-hours` | Rows in `SPRING_AI_CHAT_MEMORY` older than this are purged hourly and at startup (default `168` = 7 days; `<= 0` disables) |
+| `app.llm.max-concurrent` | Bulkhead around the Ollama chat model: simultaneous calls that may reach it (default `4`); excess calls fail fast with 429 instead of waiting out the HTTP timeout. `<= 0` disables |
 | `app.cache.semantic.enabled` | Semantic cache for `/ai/chat` (default `false` — opt-in, in-memory, fail-safe) |
 | `app.cache.semantic.store` | `memory` (default, per instance) or `redis` (entries shared across replicas; any Redis failure bypasses) |
 | `app.cache.semantic.similarity-threshold` | Cosine similarity required for a cache hit (default `0.95`; identical text ≈ 1.0) |

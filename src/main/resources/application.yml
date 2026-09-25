@@ -121,6 +121,11 @@ app:
     # Rows in SPRING_AI_CHAT_MEMORY older than this are purged hourly (and at
     # startup). 168 = 7 days; <= 0 disables the purge.
     ttl-hours: 168
+  llm:
+    # Bulkhead: simultaneous LLM calls that may reach the model. Excess calls
+    # fail fast with 429 instead of queueing for the full HTTP timeout.
+    # <= 0 disables the limit.
+    max-concurrent: 4
   cache:
     semantic:
       # Semantic cache for /ai/chat: embeds the message and answers from the cache
