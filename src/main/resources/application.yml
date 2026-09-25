@@ -107,6 +107,10 @@ app:
     # memory buckets, Redis keys, or rejection logs.
     store: memory
     requests-per-minute: 60
+  # When true, GET /ai/** carrying message/question is rejected with 405 —
+  # prompts must travel in POST bodies, never in URLs (logs/proxy/history).
+  # false for the demo (GET convenience); the prod profile sets true.
+  post-only-prompts: false
   prompt-guard:
     # Comma-separated, case-insensitive phrases rejected with 400 before the
     # message reaches the model (heuristic prompt-injection protection — not a

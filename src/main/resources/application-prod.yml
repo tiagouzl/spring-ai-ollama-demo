@@ -30,6 +30,8 @@ app:
     api-key: ${APP_API_KEY:}
     # Startup aborts when no key is configured (see security/ProdAuthGuard).
     required: true
+  # Prompts only in POST bodies — see security/PromptGetGuardFilter.
+  post-only-prompts: true
   rate-limit:
     requests-per-minute: ${RATE_LIMIT_PER_MINUTE:60}
     # Shared quota across replicas (see spring.data.redis above).

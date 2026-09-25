@@ -256,7 +256,7 @@ The runtime image runs as non-root (`appuser`, uid 1000 — keep `./data` writab
 SPRING_PROFILES_ACTIVE=prod APP_API_KEY=secret CORS_ALLOWED_ORIGINS=https://app.example.com ./mvnw spring-boot:run
 ```
 
-With `prod`, startup aborts when `APP_API_KEY` is missing (`security/ProdAuthGuard`) and when `CORS_ALLOWED_ORIGINS` is unset (no default by design). Liveness/readiness groups are always on: `/actuator/health/liveness`, `/actuator/health/readiness` (public, for k8s probes); `/actuator/metrics` and `/actuator/prometheus` stay behind the API key when set.
+With `prod`, startup aborts when `APP_API_KEY` is missing (`security/ProdAuthGuard`) and when `CORS_ALLOWED_ORIGINS` is unset (no default by design). It also sets `app.post-only-prompts: true`, so GETs on `/ai/**` carrying `message`/`question` answer 405 (use POST — query strings leak prompts into logs and proxies). Liveness/readiness groups are always on: `/actuator/health/liveness`, `/actuator/health/readiness` (public, for k8s probes); `/actuator/metrics` and `/actuator/prometheus` stay behind the API key when set.
 
 ### Interactive API docs (OpenAPI/Swagger)
 
@@ -324,7 +324,7 @@ src/main/
 
 ### Controller overview
 
-The original monolithic `ChatController` was split into focused controllers (see the tree above); every endpoint supports `GET` (query params) and `POST` (validated JSON body). A representative example — the simple chat controller with the semantic cache:
+The original monolithic `ChatController` was split into focused controllers (see the tree above); every endpoint supports `GET` (query params) and `POST` (validated JSON body) — except in prod, where prompt-carrying GETs (`message`/`question`) are rejected with 405 (`app.post-only-prompts: true`). A representative example — the simple chat controller with the semantic cache:
 
 ```java
 @RestController
@@ -400,6 +400,7 @@ app:
     allowed-origins: ""
   auth:
     api-key: ${APP_API_KEY:}
+  post-only-prompts: false # prompt GETs → 405 when true (prod sets it)
   rate-limit:
     requests-per-minute: 60
   cache:
@@ -425,6 +426,7 @@ app:
 | `app.rate-limit.requests-per-minute` | Token-bucket capacity: `N` tokens that refill continuously at `N`/min, one consumed per request (no fixed-window boundary burst). `<= 0` disables. `memory` = per-instance |
 | `app.rate-limit.store` | `memory` (default) or `redis` (shared quota via Lua, fail-open to memory; `prod` default) |
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
+| `app.post-only-prompts` | `false` (default, demo keeps GET convenience) or `true` (prod): GET `/ai/**` carrying `message`/`question` answers 405 — prompts travel in POST bodies, never in URLs (logs/proxy/history). Prompt-free GETs (`/ai/session`, `/ai/alibaba/status`, `/ai/chat/memory`) and all POSTs are untouched |
 | `app.cache.semantic.enabled` | Semantic cache for `/ai/chat` (default `false` — opt-in, in-memory, fail-safe) |
 | `app.cache.semantic.store` | `memory` (default, per instance) or `redis` (entries shared across replicas; any Redis failure bypasses) |
 | `app.cache.semantic.similarity-threshold` | Cosine similarity required for a cache hit (default `0.95`; identical text ≈ 1.0) |

@@ -142,7 +142,7 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
 ### P2 — Evoluções futuras
 
 - OIDC/JWT por usuário (Spring Security, namespace por `sub`/`tenant`).
-- Restringir prompts a POST em produção.
+- ~~Restringir prompts a POST em produção~~ — feito (`app.post-only-prompts` + `PromptGetGuardFilter`; `ANALISE.md` §29).
 - Bulkhead de concorrência, TTL de memória de chat, exclusão de conversas.
 - Guardrails dedicados de entrada/saída além do `PromptGuard`.
 

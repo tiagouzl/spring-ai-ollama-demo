@@ -726,3 +726,28 @@ Lote limitado pós-PR #12 (aprovado), sem dependências novas:
 Fora de escopo (deliberado): heurísticas de bypass do `PromptGuard` (demo) e
 fail-open Redis em multi-instância (decisão arquitectónica). Validação:
 `./mvnw verify` **66/66** verdes, pisos JaCoCo 0.65/0.54 sem violações.
+
+---
+
+## 29. POST-only prompts em produção (25/09/2026)
+
+Fecha o finding "prompts via GET vazam em logs/proxy/histórico" (relatorio §4/P2):
+
+- **Propriedade** `app.post-only-prompts` — base `false` (demo mantém GET),
+  `application-prod.yml` `true`.
+- **`security/PromptGetGuardFilter`** (`OncePerRequestFilter`, espelho do
+  `ActuatorApiKeyFilter`): devolve 405 via `ApiErrorWriter` quando flag activa +
+  `GET` + path `/ai/**` + parâmetro `message` ou `question`. GETs neutros
+  (`/ai/session`, `/ai/alibaba/status`, `/ai/chat/memory?sessionId=`) e todos
+  os POSTs passam sem alterações.
+- **Testes** (9 novos): `PromptGetGuardFilterTest` (5 unit — 405, neutro, POST,
+  flag off), `PostOnlyProdProfileTest` (perfil `prod` real por HTTP: 405 no GET
+  com prompt, 200 no `/ai/session`, 200 no POST) e `ProdPostOnlyYmlTest`
+  (trava a linha no `application-prod.yml` — sem ele, apagar a linha passaria
+  despercebida porque o default do filtro é `false`).
+- **Decisão**: o teste de wiring usa o perfil `prod` com placeholders obrigatórios
+  satisfeitos por properties (`DATABASE_URL`→HSQL mem, `REDIS_HOST`→localhost,
+  `app.rag.store=simple`, `app.rate-limit.store=memory`, `app.auth.api-key`,
+  `app.cors.allowed-origins`) — não é necessária a stack redis+pgvector real
+  para travar o comportamento.
+- **Validação**: `./mvnw verify` **75/75** verdes, JaCoCo 0.65/0.54 sem violações.
