@@ -854,3 +854,27 @@ spec `docs/superpowers/specs/2026-09-25-oidc-jwt-resource-server-design.md` (v4)
   docker `http://keycloak:8080`, porta 8081 publicada), realm em
   `infra/keycloak/realm-export.json`, E2E black-box opt-in `KeycloakE2EIT`.
 - **R1–R9** cobertos pelos testes; `./mvnw -B verify` **114/114** verdes, JaCoCo LINE ≥ 65% / BRANCH ≥ 54% sem violações.
+
+## 34. Guardrail de output dedicado (25/09/2026)
+
+Fecha a dívida "guardrails dedicados" — o `PromptGuard` de input continuava
+sendo aplicado em 8 call sites, cada um um ponto de fuga.
+
+- **Mecanismo**: `OutputGuardrail` (em `security/`) consulta a blocklist
+  `app.prompt-guard.output-blocked-phrases` (default = lista de input) e conta
+  cada disparo em `app.security.outputguardrail.triggered`. Não lança excepção:
+  quem redige é o decorator.
+- **Seam único**: `ChatModelGuardrailBeanPostProcessor` embrulha **todo** bean
+  `ChatModel` num `GuardedOutputChatModel` — ollama, DashScope e modelos futuros
+  herdam a protecção sem alterar call sites. Ordem: guardrail por dentro,
+  bulkhead por fora.
+- **Resposta redigida com 200**: nunca erro — o texto violado é substituído por
+  `"[output-guardrail] …"`, prefixo estável que o cliente detecta sem ambiguity.
+- **Streaming sem leak**: `stream()` agrega e re-emite **um único** evento; o SSE
+  perde granularidade mas nenhum texto bloqueado sai (um guardrail que deixa
+  passar o chunk primeiro não é guardrail).
+- **Limites (aceites)**: só conteúdo textual (tool-call arguments fora), lista
+  fixa contornável por reformulação — primeira linha de defesa, não camada de
+  guardrails de produção.
+- `./mvnw -B verify` **129/129** verdes (+15 testes), JaCoCo LINE ≥ 65% /
+  BRANCH ≥ 54% sem violações.

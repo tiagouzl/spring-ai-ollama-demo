@@ -105,7 +105,9 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
 - **Auth**: API key partilhada por aplicação; multiusuário real exige
   OIDC/JWT com namespace por `sub`.
 - **GETs com prompts**: mantidos por didáctica; POST é o contrato de produção.
-- **Prompt guard**: blocklist heurística, não substitui guardrails dedicados.
+- **Prompt guard**: blocklist heurística de input (8 call sites) **e** guardrail
+  de output dedicado no seam do `ChatModel` (`ANALISE.md` §34) — ambos
+  heurísticos, não substituem uma camada de guardrails de produção.
 
 ## 6. Próximos passos
 

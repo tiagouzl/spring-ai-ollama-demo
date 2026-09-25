@@ -22,6 +22,7 @@ doc below carries frontmatter with `owned_paths` and `last_verified_commit`.
 - [maven-incremental-compile-masks-classpath-breaks](lessons/maven-incremental-compile-masks-classpath-breaks.md)
 - [new-dashscope-autoconfig-classes-need-exclude-list-update](lessons/new-dashscope-autoconfig-classes-need-exclude-list-update.md)
 - [plain-objectmapper-missing-jsr310-module](lessons/plain-objectmapper-missing-jsr310-module.md)
+- [beanpostprocessor-injection-drops-jvm-meters](lessons/beanpostprocessor-injection-drops-jvm-meters.md)
 - [security-starter-form-login-chain-breaks-interceptor-auth](lessons/security-starter-form-login-chain-breaks-interceptor-auth.md)
 
 ## Reports
