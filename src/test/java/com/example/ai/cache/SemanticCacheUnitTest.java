@@ -129,6 +129,24 @@ class SemanticCacheUnitTest {
     }
 
     @Test
+    void expiredEntriesAreNotServed() throws InterruptedException {
+        EmbeddingModel model = mock(EmbeddingModel.class);
+        when(model.embed(anyString())).thenReturn(allOnes());
+        // ttl=1s: lookup must serve while fresh, then eagerly evict the entry
+        // before matching once it ages past the TTL — a stale answer must never
+        // be returned by the similarity loop.
+        SemanticCache cache = new SemanticCache(model, true, 0.95, 1, 1000, "memory",
+                new SimpleMeterRegistry(), null);
+
+        cache.store("aged question", "fresh answer");
+        assertThat(cache.lookup("aged question")).contains("fresh answer");
+
+        Thread.sleep(1100);
+        assertThat(cache.lookup("aged question")).isEmpty();
+        assertThat(cache.size()).isZero(); // eagerly dropped on read, not just hidden
+    }
+
+    @Test
     void lookupsAreCountedAsHitMissAndBypass() {
         EmbeddingModel model = mock(EmbeddingModel.class);
         when(model.embed(anyString())).thenReturn(allOnes());
