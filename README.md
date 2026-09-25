@@ -239,6 +239,28 @@ atomic Lua script, so quota is shared across replicas — and any Redis outage
 falls back to memory (fail-open, `RedisFallbackTest`). Redis never flips
 `/actuator/health` (`management.health.redis.enabled=false` by design).
 
+### OIDC / JWT mode (real principal identity)
+
+Optional: every `/ai/**` request and the metrics endpoints then require a
+Bearer JWT; the `issuer+azp+sub` of the token becomes the client namespace
+(rate-limit buckets, semantic cache, conversation memory) instead of the API
+key or IP. Default mode (no `APP_OIDC_ENABLED`) is unchanged.
+
+```bash
+APP_OIDC_ENABLED=true docker compose up -d
+TOKEN=$(curl -s -X POST "http://localhost:8081/realms/spring-ai-demo/protocol/openid-connect/token" \
+  -u spring-ai-demo:demo-client-secret -d grant_type=client_credentials \
+  | sed -E 's/.*"access_token":"([^"]+)".*/\1/')
+curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/ai/chat?message=Hello"
+```
+
+Properties: `app.oidc.enabled` / `app.oidc.issuer-uri` (`OIDC_ISSUER_URI`) /
+`app.oidc.allowed-audiences` (`OIDC_ALLOWED_AUDIENCES`). The prod profile
+fails fast when neither OIDC nor an API key is configured. E2E against the
+real stack: `E2E_KEYCLOAK=1 ./mvnw -B verify -Dtest=KeycloakE2EIT -Dsurefire.failIfNoSpecifiedTests=false`
+(never part of the default build). See the design spec
+`docs/superpowers/specs/2026-09-25-oidc-jwt-resource-server-design.md`.
+
 ### Docker (one-command stack)
 
 ```bash
@@ -457,7 +479,9 @@ This is a clean base. Implemented so far:
 Natural next steps (see the Spring AI Alibaba Agent Framework path):
 
 - Agent + Skill orchestration (Spring AI Alibaba)
-- Full OIDC / JWT auth via Spring Security (the current API key is a lightweight demo-grade option and identifies a client key, not an individual end user)
+- OIDC / JWT auth via Spring Security — implemented; see the
+  README "OIDC / JWT mode" section and `infra/keycloak/realm-export.json`
+  (pinned Keycloak 26.7.4; flip `APP_OIDC_ENABLED=true` in compose to switch)
 
 ### Production RAG: SimpleVectorStore → pgvector
 

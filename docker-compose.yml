@@ -58,6 +58,10 @@ services:
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       RATE_LIMIT_STORE: ${RATE_LIMIT_STORE:-}
+      # OIDC mode: flip to true to require Bearer JWTs on /ai/** + metrics.
+      APP_OIDC_ENABLED: ${APP_OIDC_ENABLED:-false}
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:-http://keycloak:8080/realms/spring-ai-demo}
+      OIDC_ALLOWED_AUDIENCES: ${OIDC_ALLOWED_AUDIENCES:-spring-ai-demo}
     volumes:
       # Must be writable by uid 1000 (the app user inside the image).
       - ./data:/app/data
@@ -70,6 +74,38 @@ services:
     depends_on:
       ollama-pull:
         condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+  # OIDC mode (spec 2026-09-25): identity provider. Runs always (start-dev is
+  # cheap); the app only switches to it with APP_OIDC_ENABLED=true. The demo
+  # client secret in infra/keycloak/realm-export.json is a demo credential,
+  # like the changeme Postgres password below.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    container_name: spring-ai-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_HEALTH_ENABLED: "true"
+      # Frontend URL forced to the docker-network name so token iss, discovery
+      # and the app's OIDC_ISSUER_URI are identical (spec §7); curl reaches the
+      # token endpoint through the published 8081 port.
+      KC_HOSTNAME: http://keycloak:8080
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+    ports:
+      # 8080 is taken by the app (127.0.0.1:8080:8080 above).
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
     restart: unless-stopped
 
   # PostgreSQL + pgvector for the prod profile (chat memory + vector store).
