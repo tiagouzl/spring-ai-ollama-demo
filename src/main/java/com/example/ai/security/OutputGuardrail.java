@@ -37,6 +37,7 @@ public class OutputGuardrail {
 
     private final List<String> blockedPhrases;
     private final Counter triggered;
+    private final MeterRegistry registry;
 
     public OutputGuardrail(@Value("${app.prompt-guard.output-blocked-phrases:#{null}}") List<String> blockedPhrases,
                            MeterRegistry registry) {
@@ -52,6 +53,7 @@ public class OutputGuardrail {
                 .toList();
         this.triggered = Counter.builder("app.security.outputguardrail.triggered")
                 .description("Model responses redacted by the output blocklist").register(registry);
+        this.registry = registry;
     }
 
     /** True when {@code text} contains a blocked pattern; counts each trip. */
@@ -73,5 +75,10 @@ public class OutputGuardrail {
     public static String redactedText() {
         return REDACTED_PREFIX
                 + " Response blocked by output guardrail (app.prompt-guard.output-blocked-phrases).";
+    }
+
+    /** The registry this guardrail's meters live in — shared with the semantic judge. */
+    public MeterRegistry registry() {
+        return registry;
     }
 }

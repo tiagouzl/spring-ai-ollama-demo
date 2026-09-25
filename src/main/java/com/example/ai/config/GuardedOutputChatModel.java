@@ -1,7 +1,9 @@
 package com.example.ai.config;
 
 import com.example.ai.security.OutputGuardrail;
+import com.example.ai.security.SemanticGuardrailJudge;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -9,6 +11,7 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -28,24 +31,41 @@ import java.util.List;
  */
 public class GuardedOutputChatModel implements ChatModel {
 
+    /** Same stable prefix as the blocklist redaction — one contract for clients. */
+    private static final String SEMANTIC_REDACTION =
+            OutputGuardrail.REDACTED_PREFIX
+                    + " Response blocked by the semantic guardrail (app.guardrails.semantic.policies).";
+
     private final ChatModel delegate;
     private final OutputGuardrail guardrail;
+    private final SemanticGuardrailJudge semanticJudge;
 
     public GuardedOutputChatModel(ChatModel delegate, OutputGuardrail guardrail) {
+        this(delegate, guardrail, null);
+    }
+
+    public GuardedOutputChatModel(ChatModel delegate, OutputGuardrail guardrail,
+                                  SemanticGuardrailJudge semanticJudge) {
         this.delegate = delegate;
         this.guardrail = guardrail;
+        // The judge shares this model's raw delegate: giving it the guarded
+        // model would make every verdict re-enter the guardrail.
+        this.semanticJudge = semanticJudge != null
+                ? semanticJudge
+                : new SemanticGuardrailJudge(delegate, List.of(), Duration.ZERO, false, null);
     }
 
     @Override
     public ChatResponse call(Prompt prompt) {
-        return redact(delegate.call(prompt));
+        return redact(delegate.call(prompt), questionOf(prompt));
     }
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
+        String question = questionOf(prompt);
         return Flux.defer(() -> delegate.stream(prompt).collectList())
                 .map(GuardedOutputChatModel::merge)
-                .map(this::redact)
+                .map(response -> redact(response, question))
                 .flatMapIterable(r -> List.of(r));
     }
 
@@ -54,12 +74,33 @@ public class GuardedOutputChatModel implements ChatModel {
         return delegate.getDefaultOptions();
     }
 
-    private ChatResponse redact(ChatResponse response) {
+    private ChatResponse redact(ChatResponse response, String question) {
         String text = textOf(response);
-        if (text == null || !guardrail.isBlocked(text)) {
+        if (text == null) {
             return response;
         }
-        return new ChatResponse(List.of(new Generation(new AssistantMessage(OutputGuardrail.redactedText()))));
+        if (guardrail.isBlocked(text)) {
+            return redacted(OutputGuardrail.redactedText());
+        }
+        // Blocklist first: it is free and deterministic. The judge only sees
+        // what the list could not catch, and it fails open by design.
+        if (semanticJudge.isViolation(question, text)) {
+            return redacted(SEMANTIC_REDACTION);
+        }
+        return response;
+    }
+
+    private static ChatResponse redacted(String text) {
+        return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+    }
+
+    /** The user's turn — the last instruction, which is the question being answered. */
+    private static String questionOf(Prompt prompt) {
+        if (prompt == null || prompt.getInstructions() == null || prompt.getInstructions().isEmpty()) {
+            return "";
+        }
+        Message last = prompt.getInstructions().get(prompt.getInstructions().size() - 1);
+        return last.getText() == null ? "" : last.getText();
     }
 
     private static ChatResponse merge(List<ChatResponse> responses) {

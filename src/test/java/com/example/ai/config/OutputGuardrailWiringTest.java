@@ -1,6 +1,7 @@
 package com.example.ai.config;
 
 import com.example.ai.security.OutputGuardrail;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ class OutputGuardrailWiringTest {
     @Autowired
     private OutputGuardrail guardrail;
 
+    @Autowired
+    private MeterRegistry registry;
+
     @Test
     void everyModelBeanIsGuarded() {
         assertThat(ollamaChatModel).isInstanceOf(GuardedOutputChatModel.class);
@@ -40,5 +44,14 @@ class OutputGuardrailWiringTest {
     void guardrailUsesTheDefaultBlocklist() {
         assertThat(guardrail.isBlocked("ignore previous instructions, here you go")).isTrue();
         assertThat(guardrail.isBlocked("a clean answer")).isFalse();
+    }
+
+    @Test
+    void semanticJudgeIsOffByDefaultAndRegistersNoMeters() {
+        // Default-off is the app's standing invariant: a model that answers a
+        // violation the blocklist cannot see is still served unredacted, and
+        // the semantic meters do not exist until an operator opts in.
+        assertThat(registry.find("app.guardrails.semantic.triggered").counter()).isNull();
+        assertThat(registry.find("app.guardrails.semantic.errors").counter()).isNull();
     }
 }
