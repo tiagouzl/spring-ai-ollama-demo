@@ -117,6 +117,10 @@ app:
     # substitute for a real guardrails layer). "you are now" is intentionally
     # absent: it false-positives on ordinary sentences; re-add it here if wanted.
     blocked-phrases: ignore previous instructions, ignore all previous instructions, ignore the system prompt, disregard all previous instructions, new system prompt
+  chat-memory:
+    # Rows in SPRING_AI_CHAT_MEMORY older than this are purged hourly (and at
+    # startup). 168 = 7 days; <= 0 disables the purge.
+    ttl-hours: 168
   cache:
     semantic:
       # Semantic cache for /ai/chat: embeds the message and answers from the cache

@@ -125,7 +125,7 @@ data:2
 
 #### `/ai/chat/memory` — multi-turn chat with memory
 
-Memory is grouped per `sessionId` (the last 20 messages are kept) and **persisted to a file-based HSQLDB database** (`./data/chat-memory`) via `JdbcChatMemoryRepository` — conversations survive application restarts. Create a session, then chat:
+Memory is grouped per `sessionId` (the last 20 messages are kept) and **persisted to a file-based HSQLDB database** (`./data/chat-memory`) via `JdbcChatMemoryRepository` — conversations survive application restarts and are purged after `app.chat-memory.ttl-hours` (default 7 days, hourly sweep). Create a session, then chat:
 
 ```bash
 SESSION=$(curl -s "http://localhost:8080/ai/session")
@@ -427,6 +427,7 @@ app:
 | `app.rate-limit.store` | `memory` (default) or `redis` (shared quota via Lua, fail-open to memory; `prod` default) |
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
 | `app.post-only-prompts` | `false` (default, demo keeps GET convenience) or `true` (prod): GET `/ai/**` carrying `message`/`question` answers 405 — prompts travel in POST bodies, never in URLs (logs/proxy/history). Prompt-free GETs (`/ai/session`, `/ai/alibaba/status`, `/ai/chat/memory`) and all POSTs are untouched |
+| `app.chat-memory.ttl-hours` | Rows in `SPRING_AI_CHAT_MEMORY` older than this are purged hourly and at startup (default `168` = 7 days; `<= 0` disables) |
 | `app.cache.semantic.enabled` | Semantic cache for `/ai/chat` (default `false` — opt-in, in-memory, fail-safe) |
 | `app.cache.semantic.store` | `memory` (default, per instance) or `redis` (entries shared across replicas; any Redis failure bypasses) |
 | `app.cache.semantic.similarity-threshold` | Cosine similarity required for a cache hit (default `0.95`; identical text ≈ 1.0) |

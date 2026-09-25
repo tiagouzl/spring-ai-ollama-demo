@@ -751,3 +751,28 @@ Fecha o finding "prompts via GET vazam em logs/proxy/histórico" (relatorio §4/
   `app.cors.allowed-origins`) — não é necessária a stack redis+pgvector real
   para travar o comportamento.
 - **Validação**: `./mvnw verify` **75/75** verdes, JaCoCo 0.65/0.54 sem violações.
+
+---
+
+## 30. TTL da memória de chat (25/09/2026)
+
+Fecha a item "TTL de memória de chat" do relatorio §6/P2 — as linhas em
+`SPRING_AI_CHAT_MEMORY` crescem sem limite entre sessões (o `MessageWindow`
+só limita a janela por conversa, não o armazenamento).
+
+- **Propriedade** `app.chat-memory.ttl-hours` — default `168` (7 dias, ON em
+  todos os perfis); `<= 0` desactiva o purge.
+- **`config/ChatMemoryTtlPurge`** (`@Component` + `@Scheduled(fixedDelay=1h)`,
+  `@EnableScheduling` no `ChatMemoryConfig`): `DELETE ... WHERE <timestamp> < ?`
+  sobre o índice existente `(conversation_id, "timestamp")`. Primeira execução
+  arranca no startup.
+- **Quoting do timestamp**: HSQL guarda a coluna sem aspas (`TIMESTAMP`
+  maiúsculo), PostgreSQL exige `"timestamp"` minúsculo — o componente espelha a
+  lógica de product-name do `JdbcChatMemoryRepositoryDialect.from(DataSource)`
+  da própria Spring AI (HSQL → sem aspas; resto → aspas). `MetaDataAccessException`
+  (checked) cai para o default com aspas.
+- **Testes** (2 novos): `ChatMemoryTtlPurgeTest` roda com `ttl-hours=0` no
+  contexto para o `@Scheduled` real nunca poder corrider com as asserções —
+  cada teste instancia o purge à mão (linhas de 8 dias somem, de 1 dia ficam;
+  `0` não apaga nada).
+- **Validação**: `./mvnw verify` **77/77** verdes, JaCoCo 0.65/0.54 sem violações.

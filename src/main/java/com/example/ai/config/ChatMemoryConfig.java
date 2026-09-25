@@ -5,6 +5,7 @@ import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Multi-turn chat memory backed by {@link JdbcChatMemoryRepository} (file-based
@@ -14,6 +15,7 @@ import org.springframework.context.annotation.Configuration;
  * {@code spring.ai.chat.memory.repository.jdbc.initialize-schema=always}.
  */
 @Configuration
+@EnableScheduling // powers ChatMemoryTtlPurge (hourly chat-memory cleanup)
 public class ChatMemoryConfig {
 
     @Bean
