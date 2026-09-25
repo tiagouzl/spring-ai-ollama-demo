@@ -32,8 +32,8 @@ Working tree **limpa**; commits do ciclo 2 criados:
 | `4938132` | test: lock semantic cache TTL eviction |
 | `58d888f` | build: raise jacoco floor to 0.65/0.54 |
 
-Branch pushado para `origin/chore/dependency-security-upgrade` (autorizado);
-`origin/main` permanece em `e327778`; nenhum PR.
+Push do branch apenas mediante autorização explícita (o ciclo 2 até `58d888f`
+foi pushado); `origin/main` permanece em `e327778`; nenhum PR.
 
 ## 3. Ciclo 2 — Revisão e correções aplicadas
 
