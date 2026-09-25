@@ -806,3 +806,28 @@ enquanto o Ollama enfileira em silêncio.
   remotos; o bulkhead é o padrão didáctico da stack (rate-limit, timeouts).
   DashScope fica de fora (API remota com limites próprios).
 - **Validação**: `./mvnw verify` **82/82** verdes, JaCoCo 0.65/0.54 sem violações.
+
+---
+
+## 32. Exclusão de conversas (25/09/2026)
+
+Fecha "exclusão de conversas" do relatorio §6/P2 — ficava só o TTL a limpar
+histórico velho; o cliente não tinha como apagar a memória de uma sessão.
+
+- **Endpoint**: `DELETE /ai/chat/memory/{sessionId}` (no `MemoryChatController`)
+  → **204 No Content**, idempotente (sessão desconhecida = 204). Validação de
+  `sessionId` extraída para `requireSession` (partilhada com o chat: não-vazio,
+  ≤128 → 400).
+- **Scoping**: deriva o `conversationId` exactamente como os endpoints de chat
+  (`ClientIdentity.conversationId(namespaceFor(request), sessionId)`) antes de
+  `chatMemory.clear(...)` — outra API key (ou IP no modo anónimo) nunca apaga
+  memória alheia.
+- **Teste de contrato real** (`MemoryConversationDeleteTest`, 4): o
+  `ArgumentCaptor`/lista de prompts do mock prova que, após DELETE, o prompt do
+  próximo turno já não contém turnos anteriores (memória mesmo apagada, não só
+  status 204); idempotência; sessionId >128 → 400; scoping com duas API keys
+  (`keyB` apaga → nada muda; `keyA` apaga → histórico some).
+- **Validação**: `./mvnw verify` **86/86** verdes, JaCoCo 0.65/0.54 sem violações.
+
+O relatorio §6/P2 fica só com OIDC/JWT e guardrails dedicados (+ reavaliação
+Boot 4 / Spring AI 2 bloqueada no Alibaba).

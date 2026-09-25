@@ -137,9 +137,11 @@ curl "http://localhost:8080/ai/chat/memory?sessionId=$SESSION&message=What%20is%
 # POST
 curl -X POST "http://localhost:8080/ai/chat/memory" -H "Content-Type: application/json" \
   -d "{\"sessionId\":\"$SESSION\",\"message\":\"My name is Tiago\"}"
+# DELETE — wipes the stored conversation (204, idempotent, scoped to your client namespace)
+curl -X DELETE "http://localhost:8080/ai/chat/memory/$SESSION"
 ```
 
-With the same `sessionId`, the model **remembers** the earlier turns. `POST` is preferred for long messages.
+With the same `sessionId`, the model **remembers** the earlier turns — until you `DELETE /ai/chat/memory/{sessionId}` (or the TTL purges them). `POST` is preferred for long messages.
 
 #### `/ai/chat/tools` — function calling / tool use
 

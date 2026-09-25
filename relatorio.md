@@ -143,7 +143,7 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
 
 - OIDC/JWT por usuário (Spring Security, namespace por `sub`/`tenant`).
 - ~~Restringir prompts a POST em produção~~ — feito (`app.post-only-prompts` + `PromptGetGuardFilter`; `ANALISE.md` §29).
-- Exclusão de conversas (bulkhead e TTL da memória de chat — feitos, `ANALISE.md` §30–§31).
+- ~~Exclusão de conversas~~ — feita (`DELETE /ai/chat/memory/{sessionId}`; bulkhead e TTL antes, `ANALISE.md` §30–§32).
 - Guardrails dedicados de entrada/saída além do `PromptGuard`.
 
 ## 7. Definição de pronto

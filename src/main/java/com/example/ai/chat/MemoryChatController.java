@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -46,10 +47,24 @@ public class MemoryChatController {
         return callWithMemory(request.sessionId(), request.message(), servletRequest);
     }
 
+    /**
+     * Deletes the stored conversation behind a session id, scoped to the
+     * caller's client namespace (same derivation as the chat endpoints), so
+     * one client can never wipe another client's memory. Idempotent: unknown
+     * sessions answer 204 as well.
+     */
+    @DeleteMapping("/ai/chat/memory/{sessionId}")
+    public ResponseEntity<Void> deleteConversation(@PathVariable String sessionId,
+                                                   HttpServletRequest request) {
+        requireSession(sessionId);
+        String conversationId = ClientIdentity.conversationId(
+                ClientIdentity.namespaceFor(request), sessionId);
+        chatMemory.clear(conversationId);
+        return ResponseEntity.noContent().build();
+    }
+
     private String callWithMemory(String sessionId, String message, HttpServletRequest request) {
-        if (sessionId == null || sessionId.isBlank() || sessionId.length() > 128) {
-            throw new IllegalArgumentException("sessionId is required and must be at most 128 characters");
-        }
+        requireSession(sessionId);
         promptGuard.validate(message);
         String conversationId = ClientIdentity.conversationId(
                 ClientIdentity.namespaceFor(request), sessionId);
@@ -60,5 +75,11 @@ public class MemoryChatController {
                 .user(message)
                 .call()
                 .content();
+    }
+
+    private static void requireSession(String sessionId) {
+        if (sessionId == null || sessionId.isBlank() || sessionId.length() > 128) {
+            throw new IllegalArgumentException("sessionId is required and must be at most 128 characters");
+        }
     }
 }
