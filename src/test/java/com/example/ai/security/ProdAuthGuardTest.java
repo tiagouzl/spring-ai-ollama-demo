@@ -39,4 +39,25 @@ class ProdAuthGuardTest {
         runner.withPropertyValues("app.auth.required=false")
                 .run(context -> assertThat(context).hasNotFailed());
     }
+
+    @Test
+    void requiredWithOidcIssuerStartsWithoutApiKey() {
+        runner.withPropertyValues(
+                        "app.auth.required=true",
+                        "app.oidc.enabled=true",
+                        "app.oidc.issuer-uri=https://idp.example/realms/demo")
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void requiredWithOidcEnabledButNoIssuerStillFails() {
+        runner.withPropertyValues("app.auth.required=true", "app.oidc.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .rootCause()
+                            .isInstanceOf(IllegalStateException.class)
+                            .hasMessageContaining("OIDC_ISSUER_URI");
+                });
+    }
 }
