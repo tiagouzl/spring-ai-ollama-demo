@@ -19,18 +19,21 @@ mais recente.
   JaCoCo aprovado com pisos novos (0.60/0.45 → **0.65/0.54**; atuais medidos:
   LINE 67.1%, BRANCH 56.3%).
 - **Não concluído:** upgrade coordenado de dependências (nunca iniciado no POM),
-  E2E pgvector, gate Trivy bloqueante, commit de tudo isto.
+  E2E pgvector, gate Trivy bloqueante.
 
 ## 2. Estado do repositório
 
-Working tree (**não commitado**):
+Working tree **limpa**; commits do ciclo 2 criados:
 
-| Estado | Ficheiros |
+| Commit | Mensagem |
 |---|---|
-| modificados | `RateLimitInterceptor.java`, `SemanticCacheUnitTest.java`, `pom.xml`, `README.md` |
-| novos | `RateLimitPerPathTest.java`, este relatório |
+| `7bcd5db` | docs: add project report and upgrade plan |
+| `b3e5b42` | fix: per-endpoint rate limit key |
+| `4938132` | test: lock semantic cache TTL eviction |
+| `58d888f` | build: raise jacoco floor to 0.65/0.54 |
 
-Commit `8ddfc47` presente; nenhum push; nenhum PR.
+Branch pushado para `origin/chore/dependency-security-upgrade` (autorizado);
+`origin/main` permanece em `e327778`; nenhum PR.
 
 ## 3. Ciclo 2 — Revisão e correções aplicadas
 
@@ -114,7 +117,7 @@ Commit `8ddfc47` presente; nenhum push; nenhum PR.
 8. Atualizar `README` (versões, total de testes = 61, E2E, Trivy) e
    `ANALISE.md` (matriz, advisories, resultados).
 9. Revisão do diff completo (`git diff main...HEAD`, `git status`).
-10. Commits separados, nesta ordem:
+10. Commits separados, nesta ordem — **concluído** (`7bcd5db`…`58d888f`):
     - `docs: add project report and upgrade plan` (apenas este ficheiro);
     - `fix: per-endpoint rate limit key` (`RateLimitInterceptor`, `README`,
       `RateLimitPerPathTest`);
@@ -140,5 +143,5 @@ Commit `8ddfc47` presente; nenhum push; nenhum PR.
 - [ ] Trivy bloqueante (`exit-code: '1'`)
 - [ ] README e ANALISE sincronizados
 - [ ] code review sem achados críticos
-- [ ] quatro commits criados localmente (§6.10)
-- [ ] nenhum push sem autorização
+- [x] quatro commits do ciclo 2 criados e pushados (§6.10, `7bcd5db`…`58d888f`)
+- [x] nenhum push sem autorização
