@@ -34,11 +34,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * The OIDC mode (spec §3): an app-owned {@link JwtDecoder} plus explicitly
- * ordered security chains. Nothing here activates unless app.oidc.enabled=true,
- * so default mode keeps the exact current behaviour (R3).
+ * Configures the OIDC JwtDecoder and three ordered SecurityFilterChains.
+ * The decoder and chains 1–2 activate only when app.oidc.enabled=true;
+ * chain 3 is unconditional and preserves default-mode behaviour (R3).
  */
 @Configuration
+// Keep @EnableWebSecurity here only — the 5 auto-config exclusions in
+// application.yml prevent Spring Boot from adding competing chains;
+// adding another @EnableWebSecurity class will conflict.
 @EnableWebSecurity
 public class OidcSecurityConfig {
 

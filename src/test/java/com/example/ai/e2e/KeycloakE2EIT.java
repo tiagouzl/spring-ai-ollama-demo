@@ -7,6 +7,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.regex.Pattern;
 
@@ -31,13 +32,14 @@ class KeycloakE2EIT {
     void bearerFlowAgainstComposeStack() throws Exception {
         Assumptions.assumeTrue("1".equals(System.getenv("E2E_KEYCLOAK")),
                 "Set E2E_KEYCLOAK=1 with APP_OIDC_ENABLED=true docker compose up");
-        HttpClient client = HttpClient.newHttpClient();
+        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
         // 1. Token via the published host port.
         String basic = Base64.getEncoder().encodeToString("spring-ai-demo:demo-client-secret".getBytes());
         HttpResponse<String> tokenResponse = client.send(HttpRequest.newBuilder(URI.create(TOKEN_URL))
                 .header("Authorization", "Basic " + basic)
                 .header("Content-Type", "application/x-www-form-urlencoded")
+                .timeout(Duration.ofSeconds(15))
                 .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials"))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(tokenResponse.statusCode()).isEqualTo(200);
@@ -52,21 +54,28 @@ class KeycloakE2EIT {
 
         // 3. API: no token 401, bearer 200.
         var noToken = client.send(HttpRequest.newBuilder(
-                        URI.create("http://127.0.0.1:8080/ai/session")).GET().build(),
+                        URI.create("http://127.0.0.1:8080/ai/session"))
+                .timeout(Duration.ofSeconds(15))
+                .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(noToken.statusCode()).isEqualTo(401);
         var withToken = client.send(HttpRequest.newBuilder(
                         URI.create("http://127.0.0.1:8080/ai/session"))
+                .timeout(Duration.ofSeconds(15))
                 .header("Authorization", "Bearer " + token).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(withToken.statusCode()).isEqualTo(200);
 
         // 4. Metrics protected, health public (R6).
         assertThat(client.send(HttpRequest.newBuilder(
-                        URI.create("http://127.0.0.1:8080/actuator/metrics")).GET().build(),
+                        URI.create("http://127.0.0.1:8080/actuator/metrics"))
+                .timeout(Duration.ofSeconds(15))
+                .GET().build(),
                 HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(401);
         assertThat(client.send(HttpRequest.newBuilder(
-                        URI.create("http://127.0.0.1:8080/actuator/health")).GET().build(),
+                        URI.create("http://127.0.0.1:8080/actuator/health"))
+                .timeout(Duration.ofSeconds(15))
+                .GET().build(),
                 HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(200);
     }
 }
