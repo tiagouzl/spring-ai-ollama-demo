@@ -61,6 +61,10 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
+          # Reporting remains non-blocking while Boot 3.4/Spring AI 1.0.1/Alibaba
+          # 1.0.0.4 are upgraded as one compatibility-tested dependency set.
+          exit-code: '0'
+          ignore-unfixed: true
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3

@@ -1,7 +1,9 @@
 package com.example.ai.chat;
 
 import com.example.ai.api.MemoryChatRequest;
+import com.example.ai.security.ClientIdentity;
 import com.example.ai.security.PromptGuard;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -12,10 +14,9 @@ import java.util.UUID;
 
 @RestController
 public class MemoryChatController {
-    // ponytail: sessionId is a bearer token — whoever knows it can read/continue
-    // the conversation. It is NOT bound to the caller's X-API-Key (auth is global,
-    // not per-session). Acceptable for a demo (UUIDs are unguessable); bind
-    // sessions to the caller if this ever holds sensitive data.
+    // Conversation ids are derived per caller namespace before persistence. This
+    // prevents a session id from one client aliasing another client's memory.
+    // Strong user identity/authorization still requires OIDC/JWT; see README.
 
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
@@ -34,19 +35,26 @@ public class MemoryChatController {
 
     @GetMapping("/ai/chat/memory")
     public String memoryGet(@RequestParam("sessionId") String sessionId,
-                            @RequestParam("message") String message) {
-        return callWithMemory(sessionId, message);
+                            @RequestParam("message") String message,
+                            HttpServletRequest request) {
+        return callWithMemory(sessionId, message, request);
     }
 
     @PostMapping("/ai/chat/memory")
-    public String memoryPost(@Valid @RequestBody MemoryChatRequest request) {
-        return callWithMemory(request.sessionId(), request.message());
+    public String memoryPost(@Valid @RequestBody MemoryChatRequest request,
+                             HttpServletRequest servletRequest) {
+        return callWithMemory(request.sessionId(), request.message(), servletRequest);
     }
 
-    private String callWithMemory(String sessionId, String message) {
+    private String callWithMemory(String sessionId, String message, HttpServletRequest request) {
+        if (sessionId == null || sessionId.isBlank() || sessionId.length() > 128) {
+            throw new IllegalArgumentException("sessionId is required and must be at most 128 characters");
+        }
         promptGuard.validate(message);
+        String conversationId = ClientIdentity.conversationId(
+                ClientIdentity.namespaceFor(request), sessionId);
         var advisor = MessageChatMemoryAdvisor.builder(chatMemory)
-                .conversationId(sessionId)
+                .conversationId(conversationId)
                 .build();
         return chatClient.prompt()
                 .advisors(advisor)

@@ -69,6 +69,7 @@ class ApiKeyAuthTest {
         ResponseEntity<String> response = getWithKey("test-secret-key");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains("authenticated reply");
+        assertThat(response.getHeaders().getCacheControl()).contains("no-store");
     }
 
     @Test

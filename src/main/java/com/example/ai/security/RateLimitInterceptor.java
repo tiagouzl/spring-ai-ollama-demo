@@ -151,7 +151,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     private boolean reject(HttpServletResponse response, HttpServletRequest request,
                            String clientKey, String retryAfter) throws Exception {
-        log.warn("Rate limit exceeded for client {}", clientKey);
+        log.warn("Rate limit exceeded for client fingerprint {}", clientKey);
         rejected.increment();
         response.setHeader("Retry-After", retryAfter);
         ApiErrorWriter.write(response, objectMapper, 429, "Rate limit exceeded",
@@ -183,7 +183,6 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     }
 
     private String clientKey(HttpServletRequest request) {
-        String apiKey = request.getHeader(ApiKeyAuthInterceptor.API_KEY_HEADER);
-        return (apiKey != null && !apiKey.isBlank()) ? apiKey : request.getRemoteAddr();
+        return ClientIdentity.namespaceFor(request);
     }
 }

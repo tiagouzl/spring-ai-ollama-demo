@@ -86,6 +86,19 @@ class SemanticCacheUnitTest {
     }
 
     @Test
+    void cacheIsIsolatedByClientNamespace() {
+        EmbeddingModel model = mock(EmbeddingModel.class);
+        when(model.embed(anyString())).thenReturn(allOnes());
+        SemanticCache cache = newCache(model);
+
+        cache.store("same question", "client A answer", "client-a");
+        cache.store("same question", "client B answer", "client-b");
+
+        assertThat(cache.lookup("same question", "client-a")).contains("client A answer");
+        assertThat(cache.lookup("same question", "client-b")).contains("client B answer");
+    }
+
+    @Test
     void orthogonalEmbeddingMissesCache() {
         EmbeddingModel model = mock(EmbeddingModel.class);
         when(model.embed("similar question")).thenReturn(allOnes());

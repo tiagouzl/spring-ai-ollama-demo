@@ -47,6 +47,7 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        response.setHeader("Cache-Control", "no-store");
         // CORS preflight (OPTIONS) carries no credentials, so it must pass
         // untouched — otherwise a browser's preflight for a protected endpoint
         // would be rejected with 401 before the real request is ever sent.
@@ -56,7 +57,9 @@ public class ApiKeyAuthInterceptor implements HandlerInterceptor {
         if (keyList.isEmpty()) {
             return true; // auth not configured — open
         }
-        if (matchesAny(keyList, request.getHeader(API_KEY_HEADER))) {
+        String apiKey = request.getHeader(API_KEY_HEADER);
+        if (matchesAny(keyList, apiKey)) {
+            ClientIdentity.authenticate(request, apiKey);
             return true;
         }
         log.warn("API key authentication failed for {}", request.getRemoteAddr());

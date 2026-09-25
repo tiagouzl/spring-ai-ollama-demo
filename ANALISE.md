@@ -502,7 +502,7 @@ tudo commitado, testado (56 testes) e com E2E reais verdes (Ollama, PG, Redis).
 1. **JaCoCo** — `prepare-agent` + `report` + `check` no `verify`; piso medido
    no dia (LINE 67%, BRANCH 54%), trava em 60%/45% com margem (sobe o mínimo
    quando a cobertura real subir).
-2. **Tiers** — `unit` (8 testes, sem Spring/Docker:
+2. **Tiers** — `unit` (13 testes, sem Spring/Docker:
    `-Dtest='*UnitTest,ProdAuthGuardTest'`) → `integration` (`verify` completo);
    E2E excluídos do default também via surefire (`**/e2e/**`, além do gate por
    env que já existia).
@@ -536,3 +536,70 @@ Primeiro boot de verdade com `SPRING_PROFILES_ACTIVE=prod` (app + ollama +
 metrics/prometheus 401 sem key e 200 com key; `/ai/chat` real (granite);
 `/ai/rag` grounded do pgvector com `sources`; meters custom no scrape;
 memória de chat com 2 rows em `spring_ai_chat_memory` no Postgres.
+
+---
+
+## 25. Auditoria completa e hardening (25/09/2026)
+
+A revisão cobriu arquitetura, API, segurança, corretude, configuração, CI,
+container, cobertura e documentação. O baseline antes das alterações passou com
+**50 testes, 0 falhas**; a suíte final desta rodada está registrada abaixo.
+
+### Correções aplicadas
+
+1. **Segredos fora de logs e Redis** — `ClientIdentity` transforma uma API key
+   válida em fingerprint SHA-256 depois da autenticação. Rate limit, cache e
+   memória passam a usar esse namespace; a chave bruta não aparece em Redis,
+   logs de 429 nem em identificadores de bucket.
+2. **Ordem de segurança explícita** — auth é o interceptor 0 e rate limit o 1;
+   requisições 401 não consomem quota. `ApiKeyRateLimitIsolationTest` trava essa
+   invariante e prova buckets independentes para chaves diferentes.
+3. **Isolamento de sessões e cache** — o `sessionId` externo é derivado com
+   UUIDv3 por namespace de cliente antes de chegar ao JDBC (limite real da coluna:
+   `VARCHAR(36)`). Entradas de cache ficam namespaced; no Redis, `KEYS` foi
+   removido em favor de `SCAN` não bloqueante.
+4. **Validação uniforme** — `PromptGuard` limita todo prompt a 4.000 caracteres,
+   rejeita blanks também em GET e cobre `/ai/rag/debug`, que antes ia direto ao
+   vector store. O `sessionId` GET tem o mesmo limite de 128 do POST.
+5. **Privacidade de erros e respostas** — `ApiError.path` usa apenas
+   `requestURI`, sem query string; o log de falha RAG não imprime a pergunta; e
+   todas as respostas `/ai/**` recebem `Cache-Control: no-store`.
+6. **Superfície local** — Docker Compose publica a aplicação apenas em
+   `127.0.0.1:8080`; exposição remota exige proxy TLS explícito.
+7. **Documentação corrigida** — o endpoint DashScope não faz fallback silencioso:
+   sem chave retorna 503 e erro do provedor retorna 502. O cache Redis usa
+   `SCAN`, e a documentação explica que API key identifica uma chave cliente,
+   não uma pessoa/usuário final.
+
+### Risco residual e decisão
+
+A auditoria de dependências identificou advisories HIGH/CRITICAL nos pins atuais
+(Boot 3.4.5, Spring AI 1.0.1, Alibaba 1.0.0.4, PostgreSQL driver transitivo).
+A Alibaba 1.0.0.4 declara Spring AI 1.0.1; Spring AI já possui correções 1.0.x,
+mas uma atualização parcial poderia quebrar o grafo de beans/APIs. Portanto,
+o Trivy continua **reporting-only** até a migração coordenada e coberta por
+`./mvnw verify` + E2E. Dependabot permanece semanal. O próximo passo de
+manutenção é testar o conjunto Boot/Spring AI/Alibaba em uma branch dedicada,
+não aplicar pins parciais no `main`.
+
+### Limitações explícitas
+
+- A API key é uma credencial de aplicação compartida. O namespace separa
+  clientes que usam chaves diferentes, mas não é autorização por usuário.
+  Para multiusuário real, migrar para Spring Security + OIDC/JWT e usar `sub`
+  como namespace de tenant/usuário.
+- GETs com prompt permanecem por compatibilidade didática; devem ser evitados em
+  produção porque URLs entram em histórico, proxy logs e traces. POST é o contrato
+  recomendado.
+- `PromptGuard` é heurístico, não um guardrail de segurança contra prompt
+  injection avançado.
+- `max-entries` continua sendo um teto aproximado no cache em memória; o modo
+  Redis faz `SCAN` e aplica o limite global sem bloquear o servidor.
+
+### Validação
+
+- `./mvnw -B test -Dtest='*UnitTest,ProdAuthGuardTest'` → **13 testes, 0 falhas**.
+- `./mvnw -B -DskipTests compile` → **BUILD SUCCESS**.
+- `docker compose config --quiet` → **CONFIG OK**.
+- `E2E_REDIS=true ./mvnw -B test -Dtest='SemanticCacheRedisE2EIT,RedisRateLimitE2EIT'` → **2 testes E2E com Redis real, 0 falhas**.
+- `./mvnw -B verify` → **59 testes, 0 falhas, 0 erros, 0 pulos**, gate JaCoCo verde.

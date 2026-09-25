@@ -47,12 +47,15 @@ public class PromptGuard {
 
     /**
      * Throws {@link IllegalArgumentException} (→ 400 via the global handler) when
-     * the message contains a blocked prompt-injection pattern. Blank messages are
-     * left to Bean Validation (@NotBlank) which runs before this on POST bodies.
+     * message is blank or oversized, or contains a blocked prompt-injection
+     * pattern. The same guard covers POST DTOs and query-parameter GET endpoints.
      */
     public void validate(String message) {
         if (message == null || message.isBlank()) {
-            return;
+            throw new IllegalArgumentException("Message is required and must not be blank");
+        }
+        if (message.length() > 4000) {
+            throw new IllegalArgumentException("Message must be at most 4000 characters");
         }
         String lower = message.toLowerCase(Locale.ROOT);
         for (String phrase : blockedPhrases) {
