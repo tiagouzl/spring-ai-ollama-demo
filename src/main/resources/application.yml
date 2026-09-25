@@ -31,6 +31,15 @@ spring:
       # New in Alibaba 1.1.x: same eager api-key validation as the ones above —
       # its spring.ai.model.embedding.multimodal selector defaults to dashscope.
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeMultimodalEmbeddingAutoConfiguration
+      # Exclude all Spring Security auto-configs: the app uses its own interceptor-based
+      # auth (ApiKeyAuthInterceptor) and actuator filter (ActuatorApiKeyFilter), so
+      # Spring Security's form-login and OAuth2 chains would clash. OidcSecurityConfig
+      # wires the decoder bean conditionally and will add filter chains in later tasks.
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
   ai:
     # Persistent multi-turn chat memory (JdbcChatMemoryRepository backed by the
     # file-based HSQLDB above). 'always' + continueOnError: the schema is
@@ -97,6 +106,20 @@ app:
     # missing APP_API_KEY can never leave a deployment wide open by accident.
     # The prod profile sets this to true; never enable it without a key.
     required: false
+  oidc:
+    # OIDC resource-server mode (spec docs/superpowers/specs/2026-09-25-oidc-jwt-resource-server-design.md).
+    # When true, Spring Security validates Bearer JWTs on /ai/** and the
+    # sensitive actuator endpoints (OidcSecurityConfig); identity derives from
+    # issuer+azp+sub (ClientIdentity). Default false = exact current behaviour.
+    enabled: false
+    # Discovery URL for real mode. Mapped explicitly from OIDC_ISSUER_URI —
+    # relaxed binding does NOT map that env var to this property by itself.
+    issuer-uri: ${OIDC_ISSUER_URI:}
+    # aud/azp allow-list; startup fails when enabled=true and this is empty.
+    allowed-audiences: ${OIDC_ALLOWED_AUDIENCES:}
+    # Test-only local decoder (no network): PEM public key; issuer-uri above
+    # is then used solely as the expected iss claim. Never set in deployments.
+    public-key-location: ""
   rate-limit:
     # Max requests per minute per client (X-API-Key header when present, else IP
     # address) on /ai/** endpoints. <= 0 disables. Backends (app.rate-limit.store):
