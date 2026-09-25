@@ -4,7 +4,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -14,6 +19,9 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.http.HttpMethod;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
@@ -31,6 +39,7 @@ import java.util.stream.Collectors;
  * so default mode keeps the exact current behaviour (R3).
  */
 @Configuration
+@EnableWebSecurity
 public class OidcSecurityConfig {
 
     @Bean
@@ -111,5 +120,41 @@ public class OidcSecurityConfig {
         } catch (Exception e) {
             throw new IllegalStateException("Cannot read app.oidc.public-key-location: " + location, e);
         }
+    }
+
+    /**
+     * OIDC chain (spec §3 chain 1): /ai/** requires a valid Bearer JWT;
+     * OPTIONS preflight is exempt so browsers can CORS-preflight freely.
+     * Conditional — only active when app.oidc.enabled=true.
+     */
+    @Bean
+    @Order(1)
+    @ConditionalOnProperty(name = "app.oidc.enabled", havingValue = "true")
+    SecurityFilterChain oidcAiSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/ai/**")
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/ai/**").permitAll()
+                        .anyRequest().authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+        return http.build();
+    }
+
+    /**
+     * Always-on fallback (spec §3 chain 3): catches every request the
+     * conditional OIDC chains don't match, and in default mode is the ONLY
+     * chain — permitAll + CSRF off + stateless reproduces the pre-Spring-Security
+     * behaviour exactly (R3). Never remove its @Order(3).
+     */
+    @Bean
+    @Order(3)
+    SecurityFilterChain fallbackSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
     }
 }
