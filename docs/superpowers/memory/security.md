@@ -13,9 +13,10 @@ related_docs:
   - ANALISE.md
 entrypoints:
   - src/main/java/com/example/ai/security/ApiSecurityConfig.java
+  - src/main/java/com/example/ai/security/OidcSecurityConfig.java
   - src/main/java/com/example/ai/security/PromptGetGuardFilter.java
   - src/main/java/com/example/ai/security/ClientIdentity.java
-last_verified_commit: 0ac753777d23549cbfe024fe0ae3137200d3dd0f
+last_verified_commit: 4abb6142c1ac8cf5f288579a82972f5456a7f6b7
 status: active
 ---
 
@@ -31,7 +32,8 @@ status: active
 ## Entry points
 
 - `ApiSecurityConfig.java:31-33` — registers key auth (order 0) and rate limit (order 1) on `/ai/**` only.
-- `ClientIdentity.namespaceFor(request)` — API-key fingerprint if authenticated, else IP fingerprint; feeds rate-limit buckets, semantic-cache namespaces and conversation ids (`ClientIdentity.conversationId`).
+- `OidcSecurityConfig.java` — the app's only `@EnableWebSecurity` class: validating `JwtDecoder` plus the three ordered chains (all gated `app.oidc.enabled=true` except the `@Order 3` fallback, which is always registered to keep default mode chain-identical).
+- `ClientIdentity.namespaceFor(request)` — JWT fingerprint (`jwt:issuer:azp|-:sub`) when a `JwtAuthenticationToken` is in the security context, else API-key fingerprint, else IP fingerprint; feeds rate-limit buckets, semantic-cache namespaces and conversation ids (`ClientIdentity.conversationId`).
 
 ## Invariants
 
@@ -46,7 +48,7 @@ status: active
 
 ## Extension points
 
-- New endpoints under `/ai/**` get auth+rate-limit automatically; new security rules go into `ApiSecurityConfig` or a `OncePerRequestFilter` registered in `SecurityFilterConfig`.
+- New endpoints under `/ai/**` get auth+rate-limit automatically; new security rules go into `ApiSecurityConfig` or a `OncePerRequestFilter` registered in `SecurityFilterConfig`; chain-level (HTTP) rules go into `OidcSecurityConfig` — keep `@EnableWebSecurity` there alone (see its class comment and the security-starter lesson).
 
 ## Common pitfalls
 
