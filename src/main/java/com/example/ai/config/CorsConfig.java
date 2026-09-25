@@ -39,7 +39,7 @@ public class CorsConfig implements WebMvcConfigurer {
         boolean wildcard = Arrays.asList(origins).contains("*");
         registry.addMapping("/ai/**")
                 .allowedOrigins(origins)
-                .allowedMethods("GET", "POST", "OPTIONS")
+                .allowedMethods("GET", "POST", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(!wildcard);
     }

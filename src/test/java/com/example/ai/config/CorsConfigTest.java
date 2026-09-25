@@ -74,4 +74,19 @@ class CorsWildcardConfiguredTest {
         assertThat(response.getHeaders().getFirst("Access-Control-Allow-Origin")).isEqualTo("*");
         assertThat(response.getHeaders().getFirst("Access-Control-Allow-Credentials")).isNull();
     }
+
+    @Test
+    void deleteMethodIsAllowedInPreflight() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Origin", "https://evil.example");
+        headers.set("Access-Control-Request-Method", "DELETE");
+
+        ResponseEntity<String> response = rest.exchange(
+                "http://localhost:" + port + "/ai/chat/memory/some-session",
+                HttpMethod.OPTIONS, new HttpEntity<>(headers), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getHeaders().getFirst("Access-Control-Allow-Methods"))
+                .contains("DELETE");
+    }
 }
