@@ -28,6 +28,9 @@ spring:
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeAudioTranscriptionAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeRerankAutoConfiguration
       - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeEmbeddingAutoConfiguration
+      # New in Alibaba 1.1.x: same eager api-key validation as the ones above —
+      # its spring.ai.model.embedding.multimodal selector defaults to dashscope.
+      - com.alibaba.cloud.ai.autoconfigure.dashscope.DashScopeMultimodalEmbeddingAutoConfiguration
   ai:
     # Persistent multi-turn chat memory (JdbcChatMemoryRepository backed by the
     # file-based HSQLDB above). 'always' + continueOnError: the schema is

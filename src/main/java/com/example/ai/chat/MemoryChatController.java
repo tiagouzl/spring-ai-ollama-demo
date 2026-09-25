@@ -53,11 +53,10 @@ public class MemoryChatController {
         promptGuard.validate(message);
         String conversationId = ClientIdentity.conversationId(
                 ClientIdentity.namespaceFor(request), sessionId);
-        var advisor = MessageChatMemoryAdvisor.builder(chatMemory)
-                .conversationId(conversationId)
-                .build();
+        var advisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
         return chatClient.prompt()
-                .advisors(advisor)
+                .advisors(a -> a.advisors(advisor)
+                        .param(ChatMemory.CONVERSATION_ID, conversationId))
                 .user(message)
                 .call()
                 .content();

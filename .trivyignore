@@ -1,0 +1,6 @@
+# CVE-2026-35568 (mcp-core 0.18.3, HIGH, DNS rebinding): fixed version is
+# MCP SDK 1.0.0, but 0.18.3 is pinned by spring-ai-client-chat 1.1.8 — the
+# latest Spring AI 1.1.x release — and 0.x -> 1.x is a major API jump.
+# The MCP endpoints are not configured or used by this application.
+# Drop this waiver when Spring AI ships an MCP SDK bump (see ANALISE.md §27).
+CVE-2026-35568
