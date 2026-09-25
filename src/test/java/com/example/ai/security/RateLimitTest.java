@@ -60,6 +60,7 @@ class RateLimitTest {
         assertThat(third.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(third.getBody()).contains("Too many requests");
         assertThat(third.getHeaders().getFirst("Retry-After")).isEqualTo("60");
+        assertThat(third.getBody()).contains("\"error\":\"rate_limit_exceeded\"");
         assertThat(registry.get("app.security.ratelimit.rejected").counter().count()).isEqualTo(1.0);
     }
 

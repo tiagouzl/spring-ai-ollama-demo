@@ -154,7 +154,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         log.warn("Rate limit exceeded for client fingerprint {}", clientKey);
         rejected.increment();
         response.setHeader("Retry-After", retryAfter);
-        ApiErrorWriter.write(response, objectMapper, 429, "Rate limit exceeded",
+        ApiErrorWriter.write(response, objectMapper, 429, "rate_limit_exceeded",
                 "Too many requests. Limit: " + capacity + " per minute per client and endpoint.", request);
         return false;
     }

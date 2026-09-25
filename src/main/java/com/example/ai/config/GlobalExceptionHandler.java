@@ -67,7 +67,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(LlmBulkheadFullException.class)
     public ResponseEntity<ApiError> handleLlmBusy(LlmBulkheadFullException ex, WebRequest request) {
         log.warn("Bulkhead: {}", ex.getMessage());
-        return build(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests",
+        return build(HttpStatus.TOO_MANY_REQUESTS, "llm_bulkhead_full",
                 "The model is at capacity (app.llm.max-concurrent). Retry shortly.", request);
     }
 
