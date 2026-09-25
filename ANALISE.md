@@ -1,18 +1,18 @@
 # 📊 Análise do Projeto: `spring-ai-ollama-demo`
 
-> Relatório de análise técnica gerado em 01/09/2026 — commit `1a49fad` (branch `main`). Estendido em 04/09/2026 até o commit `23a84da` com as rodadas 9-11 (segurança, RAG, Docker/OpenAPI/output estruturado, cache semântico e BOM Alibaba).
+> Relatório de análise técnica gerado em 01/09/2026 — commit `1a49fad` (branch `main`). Estendido em 04/09/2026 até o commit `23a84da` com as rodadas 9-11 (segurança, RAG, Docker/OpenAPI/output estruturado, cache semântico e BOM Alibaba). Atualizado em 25/09/2026 (upgrade de dependências, §26–§32, 86 testes).
 
 ## 1. Visão Geral
 
-Projeto de demonstração **Spring Boot 3.4.5 + Spring AI 1.0.1** que integra LLMs rodando localmente via **Ollama** (`granite4.1:3b`), com opção opcional de nuvem via **Spring AI Alibaba DashScope** (`qwen-plus`). É um repositório de referência/estudo para construir aplicações de IA no ecossistema Java/Spring, cobrindo os principais padrões: chat, streaming, memória, function calling e RAG.
+Projeto de demonstração **Spring Boot 3.5.16 + Spring AI 1.1.8** que integra LLMs rodando localmente via **Ollama** (`granite4.1:3b`), com opção opcional de nuvem via **Spring AI Alibaba DashScope** (`qwen-plus`). É um repositório de referência/estudo para construir aplicações de IA no ecossistema Java/Spring, cobrindo os principais padrões: chat, streaming, memória, function calling e RAG.
 
 **Stack:**
 
 | Camada | Tecnologia |
 |---|---|
 | Linguagem | Java 21 (LTS) |
-| Framework | Spring Boot 3.4.5 |
-| AI SDK | Spring AI 1.0.1 + Spring AI Alibaba 1.0.0.4 |
+| Framework | Spring Boot 3.5.16 |
+| AI SDK | Spring AI 1.1.8 + Spring AI Alibaba 1.1.2.4-security-fix |
 | Modelo local | Ollama `granite4.1:3b` + `nomic-embed-text` |
 | Modelo cloud (opcional) | DashScope `qwen-plus` |
 | Vector Store | `SimpleVectorStore` (in-memory) |
