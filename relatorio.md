@@ -157,7 +157,12 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
 - ~~OIDC/JWT por usuário (Spring Security, namespace por `sub`/`tenant`).~~ — feito (identidade do principal via OIDC/JWT; ver `docs/superpowers/specs/2026-09-25-oidc-jwt-resource-server-design.md` e `ANALISE.md` §33).
 - ~~Restringir prompts a POST em produção~~ — feito (`app.post-only-prompts` + `PromptGetGuardFilter`; `ANALISE.md` §29).
 - ~~Exclusão de conversas~~ — feita (`DELETE /ai/chat/memory/{sessionId}`; bulkhead e TTL antes, `ANALISE.md` §30–§32).
-- Guardrails dedicados de entrada/saída além do `PromptGuard`.
+- ~~Guardrails dedicados de entrada/saída além do `PromptGuard`~~ — feito em três
+  estágios no seam `ChatModel`: blocklist de output, classedor de embeddings
+  determinista (**activo por omissão**, calibração e verificação end-to-end) e
+  juiz LLM opcional (`ANALISE.md` §34–§36; README "Guardrails de output"). O que
+  falta é uma camada de guardrails de **produção** dedicada — os três estágios
+  são heurísticas verificadas, e está escrito que não chega para produção.
 
 ## 7. Definição de pronto
 

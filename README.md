@@ -1,7 +1,7 @@
 # Spring AI + Ollama Demo · with Spring AI Alibaba (DashScope)
 
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.4-6DB33F?logo=spring&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.16-6DB33F?logo=spring&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-granite4.1:3b-000000)
 [![Build](https://img.shields.io/github/actions/workflow/status/tiagouzl/spring-ai-ollama-demo/ci.yml?branch=main&label=CI)](https://github.com/tiagouzl/spring-ai-ollama-demo/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -10,11 +10,13 @@ A Spring Boot 3 application that integrates Spring AI with a local LLM served by
 
 It started as a small demo to get `ChatClient` running against a local model and kept growing one feature at a time — streaming, memory, tools, RAG, then a security/observability pass once the happy-path stuff worked. If you want the blow-by-blow of what changed and why, `ANALISE.md` has every round documented.
 
+**Current state:** 151 tests green in CI, JaCoCo floors held. The security-relevant features are not unit-tested-and-hoped-for: OIDC/JWT is verified by an opt-in black-box E2E against the real Keycloak stack (`E2E_KEYCLOAK=1 ./mvnw -B verify -Dtest=KeycloakE2EIT`), and the output-guardrail threshold is calibrated against the real embedding model with positive and negative controls (`E2E_GUARDRAIL=1 ./mvnw test -Dtest=EmbeddingPolicyCalibrationIT`), including an end-to-end check that a destructive-command reply is redacted. What the heuristics do **not** do is written down in the same places.
+
 ---
 
 ## Highlights
 
-Spring Boot 3.5 + Spring AI 1.1.8 + Spring AI Alibaba 1.1.2.4-security-fix, built around the fluent `ChatClient` API. Runs 100% local and free by default via Ollama — no API key needed. Setting `DASHSCOPE_API_KEY` enables the dedicated DashScope endpoint; generic `/ai/chat` deliberately remains on Ollama, and DashScope failures surface as errors rather than silent fallback responses.
+Spring Boot 3.5.16 + Spring AI 1.1.8 + Spring AI Alibaba 1.1.2.4-security-fix, built around the fluent `ChatClient` API. Runs 100% local and free by default via Ollama — no API key needed. Setting `DASHSCOPE_API_KEY` enables the dedicated DashScope endpoint; generic `/ai/chat` deliberately remains on Ollama, and DashScope failures surface as errors rather than silent fallback responses.
 
 Endpoints cover the usual patterns: streaming (SSE via `ChatClient.stream()`), multi-turn chat with per-conversation memory, function calling / tool use with `@Tool`, structured (typed) output via `ChatClient.entity()`, and RAG with `SimpleVectorStore` + `TokenTextSplitter` chunking + `nomic-embed-text` embeddings — no external vector DB required.
 
@@ -515,6 +517,8 @@ This is a clean base. Implemented so far:
 - RAG with `SimpleVectorStore` + `nomic-embed-text` (manual retrieval, grounded answers)
 - Spring AI Alibaba — DashScope (Qwen) via `spring-ai-alibaba-starter-dashscope`; the dedicated endpoint is opt-in and exposes real 503/502 states instead of a silent Ollama fallback
 - API-key auth + rate limiting + prompt-injection guard (opt-in, lightweight interceptors)
+- **OIDC / JWT auth via Spring Security** — real-identity mode where the JWT's issuer+azp+sub *is* the client namespace; ordered chains for `/ai/**` + actuator, Keycloak pinned in compose (see "OIDC / JWT mode")
+- **Output guardrails** — three stages at the `ChatModel` seam: blocklist, deterministic embedding classifier (on by default, calibrated and verified end-to-end), optional LLM judge (see "Guardrails de output")
 - Structured output — typed records via `ChatClient.entity()` (`/ai/chat/structured`)
 - OpenAPI/Swagger UI — springdoc at `/swagger-ui.html` / `/v3/api-docs`
 - Docker Compose — Ollama + app in one command, models pulled automatically
@@ -523,9 +527,9 @@ This is a clean base. Implemented so far:
 Natural next steps (see the Spring AI Alibaba Agent Framework path):
 
 - Agent + Skill orchestration (Spring AI Alibaba)
-- OIDC / JWT auth via Spring Security — implemented; see the
-  README "OIDC / JWT mode" section and `infra/keycloak/realm-export.json`
-  (pinned Keycloak 26.7.4; flip `APP_OIDC_ENABLED=true` in compose to switch)
+- Boot 4 / Spring AI 2 — reachable only through Alibaba `2.0.0-M1.1` (a milestone
+  on a milestone Spring AI), so deliberately deferred; revisit when Alibaba ships
+  a release aligned with the Spring AI 2 GA (see `ANALISE.md` §35)
 
 ### Production RAG: SimpleVectorStore → pgvector
 
