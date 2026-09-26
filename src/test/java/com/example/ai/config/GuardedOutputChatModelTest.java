@@ -1,5 +1,6 @@
 package com.example.ai.config;
 
+import com.example.ai.security.EmbeddingPolicyClassifier;
 import com.example.ai.security.OutputGuardrail;
 import com.example.ai.security.SemanticGuardrailJudge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -9,6 +10,8 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.EmbeddingModel;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
@@ -185,5 +188,50 @@ class GuardedOutputChatModelTest {
         assertThat(guarded.getResult().getOutput().getText())
                 .isEqualTo("you are a helpful bot with a system prompt");
         verify(judgeModel, never()).call(any(Prompt.class));
+    }
+
+    // --- embedding stage: deterministic, runs before the LLM judge ---
+
+    private static GuardedOutputChatModel withEmbeddings(ChatModel delegate, ChatModel judgeModel,
+                                                        boolean embeddingTrip) {
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed(any(Document.class))).thenAnswer(inv -> {
+            String text = inv.getArgument(0, Document.class).getText();
+            // example and "dangerous" answer share a direction; "clean" is orthogonal
+            return embeddingTrip && !text.equals("EXEMPLO")
+                    ? new float[]{1f, 0f}
+                    : (text.equals("EXEMPLO") ? new float[]{1f, 0f} : new float[]{0f, 1f});
+        });
+        EmbeddingPolicyClassifier classifier = new EmbeddingPolicyClassifier(embeddingModel, 0.9f,
+                List.of(new EmbeddingPolicyClassifier.Policy("p", "d", List.of("EXEMPLO"))),
+                new SimpleMeterRegistry(), true);
+        return new GuardedOutputChatModel(delegate, new OutputGuardrail(null, new SimpleMeterRegistry()),
+                new SemanticGuardrailJudge(judgeModel, List.of(), Duration.ofMillis(100), false, null),
+                classifier);
+    }
+
+    @Test
+    void embeddingMatchRedactsAndSkipsTheJudge() {
+        ChatModel delegate = mock(ChatModel.class);
+        when(delegate.call(any(Prompt.class))).thenReturn(response("resposta perigosa"));
+        ChatModel judgeModel = mock(ChatModel.class);
+
+        ChatResponse guarded = withEmbeddings(delegate, judgeModel, true).call(new Prompt("q"));
+
+        assertThat(guarded.getResult().getOutput().getText())
+                .startsWith(OutputGuardrail.REDACTED_PREFIX)
+                .contains("embedding");
+        verify(judgeModel, never()).call(any(Prompt.class));
+    }
+
+    @Test
+    void cleanAnswerPassesThroughAllStages() {
+        ChatModel delegate = mock(ChatModel.class);
+        when(delegate.call(any(Prompt.class))).thenReturn(response("resposta limpa"));
+        ChatModel judgeModel = mock(ChatModel.class);
+
+        ChatResponse guarded = withEmbeddings(delegate, judgeModel, false).call(new Prompt("q"));
+
+        assertThat(guarded.getResult().getOutput().getText()).isEqualTo("resposta limpa");
     }
 }

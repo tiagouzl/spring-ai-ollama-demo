@@ -1,5 +1,6 @@
 package com.example.ai.config;
 
+import com.example.ai.security.EmbeddingPolicyClassifier;
 import com.example.ai.security.OutputGuardrail;
 import com.example.ai.security.SemanticGuardrailJudge;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -36,16 +37,27 @@ public class GuardedOutputChatModel implements ChatModel {
             OutputGuardrail.REDACTED_PREFIX
                     + " Response blocked by the semantic guardrail (app.guardrails.semantic.policies).";
 
+    private static final String EMBEDDING_REDACTION =
+            OutputGuardrail.REDACTED_PREFIX
+                    + " Response blocked by the embedding guardrail (app.guardrails.embeddings).";
+
     private final ChatModel delegate;
     private final OutputGuardrail guardrail;
     private final SemanticGuardrailJudge semanticJudge;
+    private final EmbeddingPolicyClassifier embeddingClassifier;
 
     public GuardedOutputChatModel(ChatModel delegate, OutputGuardrail guardrail) {
-        this(delegate, guardrail, null);
+        this(delegate, guardrail, null, null);
     }
 
     public GuardedOutputChatModel(ChatModel delegate, OutputGuardrail guardrail,
                                   SemanticGuardrailJudge semanticJudge) {
+        this(delegate, guardrail, semanticJudge, null);
+    }
+
+    public GuardedOutputChatModel(ChatModel delegate, OutputGuardrail guardrail,
+                                  SemanticGuardrailJudge semanticJudge,
+                                  EmbeddingPolicyClassifier embeddingClassifier) {
         this.delegate = delegate;
         this.guardrail = guardrail;
         // The judge shares this model's raw delegate: giving it the guarded
@@ -53,6 +65,7 @@ public class GuardedOutputChatModel implements ChatModel {
         this.semanticJudge = semanticJudge != null
                 ? semanticJudge
                 : new SemanticGuardrailJudge(delegate, List.of(), Duration.ZERO, false, null);
+        this.embeddingClassifier = embeddingClassifier;
     }
 
     @Override
@@ -82,8 +95,12 @@ public class GuardedOutputChatModel implements ChatModel {
         if (guardrail.isBlocked(text)) {
             return redacted(OutputGuardrail.redactedText());
         }
-        // Blocklist first: it is free and deterministic. The judge only sees
-        // what the list could not catch, and it fails open by design.
+        // Blocklist first: free and deterministic. Then the embedding stage:
+        // also deterministic, one cheap call, and — unlike the judge — proven
+        // by a calibrated threshold. The judge only sees what both miss.
+        if (embeddingClassifier != null && embeddingClassifier.isViolation(text)) {
+            return redacted(EMBEDDING_REDACTION);
+        }
         if (semanticJudge.isViolation(question, text)) {
             return redacted(SEMANTIC_REDACTION);
         }
