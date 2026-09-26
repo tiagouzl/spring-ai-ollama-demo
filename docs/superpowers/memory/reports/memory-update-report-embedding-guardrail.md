@@ -24,4 +24,5 @@
 - The exact per-control cosine values — summarised as ranges in the card; the IT recomputes them.
 
 ## Open gaps
+- **The stage ships off by default.** An end-to-end request against the real model exposed that it measures example *form*: a raw destructive command (`rm -rf ~/`, 0.63) slips past narrative examples (0.81 wrapped in prose). The default-on decision was reverted; `rawCommandViolationIsAKnownGap` records the measured gap. Closing it needs content-shaped examples plus recalibration, or a second opinion behind the blocklist.
 - The separation between violation and benign answers is narrow (≈0.03). Documented, not solved: more labelled examples per policy is the tuning path, and a production deployment would want a dedicated guardrails service rather than any of the three stages.

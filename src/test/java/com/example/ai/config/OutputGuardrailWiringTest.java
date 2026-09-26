@@ -56,11 +56,12 @@ class OutputGuardrailWiringTest {
     }
 
     @Test
-    void embeddingStageIsOnByDefault() {
-        // Calibrated over two independent pools (0 false positives, 6/6
-        // violations caught) — EmbeddingPolicyCalibrationIT is the runnable
-        // proof. This locks the default so it cannot silently regress to off.
-        assertThat(registry.find("app.guardrails.embeddings.triggered").counter()).isNotNull();
-        assertThat(registry.find("app.guardrails.embeddings.errors").counter()).isNotNull();
+    void embeddingStageIsOffByDefaultUntilItsGapIsClosed() {
+        // The stage catches narrative violations with 0 false positives, but a
+        // raw destructive command slips through — it measures example form, not
+        // content. Off by default until the examples are content-shaped and the
+        // calibration is re-run; EmbeddingPolicyCalibrationIT records the gap.
+        assertThat(registry.find("app.guardrails.embeddings.triggered").counter()).isNull();
+        assertThat(registry.find("app.guardrails.embeddings.errors").counter()).isNull();
     }
 }

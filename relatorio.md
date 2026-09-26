@@ -112,9 +112,10 @@ pelo CI do PR; `0.36.0` sem prefixo não existe).
   com o modelo local por omissão (`granite4.1:3b`) o juíz responde `nao` a
   violações óbvias — inoperante; daí a flag off por omissão e o registo por
   veredicto. Substituído na prática por um estágio **determinista** de
-  embeddings com threshold calibrado (`ANALISE.md` §36) — **activo por
-  omissão**, com 0 falsos positivos e 6/6 violações apanhadas em duas pools
-  independentes.
+  embeddings com threshold calibrado (`ANALISE.md` §36) — **off por omissão**:
+  apanha violações narrativas com 0 falsos positivos, mas uma verificação
+  end-to-end provou que deixa passar um comando destrutivo cru (mede forma, não
+  conteúdo).
 - **Boot 4 / Spring AI 2**: reavaliado em `ANALISE.md` §35 — alcançável apenas
   com Alibaba `2.0.0-M1.1` (milestone sobre Spring AI 2.0.0-M1); decisão de não
   subir, a rever quando existir release Alibaba alinhada com o Spring AI 2 GA.
