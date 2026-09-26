@@ -919,3 +919,26 @@ reformulação) e actualiza o estado do bloqueio Boot 4 / Spring AI 2.
   release alinhada com o 2.0 GA.
 - `./mvnw -B verify` **142/142** verdes (+13 testes), JaCoCo LINE ≥ 65% /
   BRANCH ≥ 54% sem violações.
+
+### Medição real do juiz (spike contra o stack, 25/09/2026)
+
+Testado contra o modelo por omissão `granite4.1:3b` no compose:
+
+- **O juiz não discrimina**: a uma violação óbvia (resposta que revela o system
+  prompt) respondeu `nao` — o mesmo veredicto que dá a uma resposta limpa. Com
+  este modelo o estágio semântico é um **no-op**: `triggered` nunca sobe, e sem
+  registo por veredicto um operador veria tudo "saudável" sem protecção
+  nenhuma.
+- **Instrumentação fiel**: o `app.guardrails.semantic.errors` apanhou um caso em
+  que o veredicto não foi parseável — o fail-open funcionou como desenhado.
+- **Latência**: ~21 s por resposta (um round-trip completo extra do modelo) com
+  a resposta original a ~2 s.
+- **Defeitos corrigidos** (nesta revisão): o juiz herdava `temperature: 0.7`
+  da app — um classificador precisa de `temperature: 0`, senão o veredicto é
+  uma moeda; e não havia registo por veredicto. Passou a `temperature: 0` e a
+  uma linha INFO por veredicto (veredito + latência), para que um juiz inútil
+  seja visível em vez de silencioso.
+- **Conclusão**: a flag continua **off por omissão** e o feature só deve ser
+  ligado contra um modelo que se prove discriminante. Gatilho para rever:
+  modelo maior/local capaz (verificar sempre com um controlo positivo antes de
+  ligar) ou classificador por embeddings — desenho novo, não Decoder-only.
