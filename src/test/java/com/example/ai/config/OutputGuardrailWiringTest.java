@@ -54,4 +54,13 @@ class OutputGuardrailWiringTest {
         assertThat(registry.find("app.guardrails.semantic.triggered").counter()).isNull();
         assertThat(registry.find("app.guardrails.semantic.errors").counter()).isNull();
     }
+
+    @Test
+    void embeddingStageIsOnByDefault() {
+        // Calibrated over two independent pools (0 false positives, 6/6
+        // violations caught) — EmbeddingPolicyCalibrationIT is the runnable
+        // proof. This locks the default so it cannot silently regress to off.
+        assertThat(registry.find("app.guardrails.embeddings.triggered").counter()).isNotNull();
+        assertThat(registry.find("app.guardrails.embeddings.errors").counter()).isNotNull();
+    }
 }
