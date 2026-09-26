@@ -29,3 +29,6 @@ data/
 
 # unlazy gate ledgers (scratch, per-plan)
 .unlazy/
+
+# annotation-processor output leaked into the project root by a build
+org/
