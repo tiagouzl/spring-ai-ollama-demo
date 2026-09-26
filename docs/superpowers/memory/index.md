@@ -25,6 +25,7 @@ doc below carries frontmatter with `owned_paths` and `last_verified_commit`.
 - [beanpostprocessor-injection-drops-jvm-meters](lessons/beanpostprocessor-injection-drops-jvm-meters.md)
 - [llm-judge-must-be-measured-with-a-positive-control](lessons/llm-judge-must-be-measured-with-a-positive-control.md)
 - [running-tests-while-the-compose-app-is-up-locks-hsqldb](lessons/running-tests-while-the-compose-app-is-up-locks-hsqldb.md)
+- [guardrail-decorator-swallows-the-concrete-bean-type](lessons/guardrail-decorator-swallows-the-concrete-bean-type.md)
 - [security-starter-form-login-chain-breaks-interceptor-auth](lessons/security-starter-form-login-chain-breaks-interceptor-auth.md)
 
 ## Reports

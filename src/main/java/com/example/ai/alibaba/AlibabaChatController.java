@@ -1,13 +1,14 @@
 package com.example.ai.alibaba;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.example.ai.api.ChatRequest;
 import com.example.ai.security.PromptGuard;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +24,11 @@ public class AlibabaChatController {
     private static final Logger log = LoggerFactory.getLogger(AlibabaChatController.class);
 
     private final ChatClient ollamaChatClient;
-    private final ObjectProvider<DashScopeChatModel> dashScopeProvider;
+    // Typed as ChatModel and selected by bean name: the output guardrail wraps
+    // every ChatModel bean, so the dashScopeChatModel bean arrives here as a
+    // GuardedOutputChatModel — a DashScopeChatModel-typed injection would no
+    // longer resolve (the guardrail's whole point is that callers cannot skip it).
+    private final ObjectProvider<ChatModel> dashScopeProvider;
     private final String dashScopeApiKey;
     private final PromptGuard promptGuard;
     // Built once at startup when the DashScope model bean exists; null otherwise
@@ -31,7 +36,7 @@ public class AlibabaChatController {
     private final ChatClient dashScopeChatClient;
 
     public AlibabaChatController(ChatClient.Builder ollamaBuilder,
-                                 ObjectProvider<DashScopeChatModel> dashScopeProvider,
+                                 @Qualifier("dashScopeChatModel") ObjectProvider<ChatModel> dashScopeProvider,
                                  @Value("${spring.ai.dashscope.api-key:}") String dashScopeApiKey,
                                  PromptGuard promptGuard) {
         // Ollama ChatClient is the default ChatClient.Builder (auto-configured for Ollama)
@@ -39,7 +44,7 @@ public class AlibabaChatController {
         this.dashScopeProvider = dashScopeProvider;
         this.dashScopeApiKey = dashScopeApiKey;
         this.promptGuard = promptGuard;
-        DashScopeChatModel dashModel = dashScopeProvider.getIfAvailable();
+        ChatModel dashModel = dashScopeProvider.getIfAvailable();
         this.dashScopeChatClient = dashModel == null ? null : ChatClient.builder(dashModel).build();
     }
 
@@ -90,7 +95,7 @@ public class AlibabaChatController {
         if (!isDashScopeConfigured()) {
             return "Alibaba DashScope: NOT CONFIGURED (DASHSCOPE_API_KEY not set)";
         }
-        DashScopeChatModel dashModel = dashScopeProvider.getIfAvailable();
+        ChatModel dashModel = dashScopeProvider.getIfAvailable();
         if (dashModel == null) {
             return "Alibaba DashScope: API key set but DashScopeChatModel bean not created — check logs";
         }
