@@ -24,6 +24,7 @@ doc below carries frontmatter with `owned_paths` and `last_verified_commit`.
 - [plain-objectmapper-missing-jsr310-module](lessons/plain-objectmapper-missing-jsr310-module.md)
 - [beanpostprocessor-injection-drops-jvm-meters](lessons/beanpostprocessor-injection-drops-jvm-meters.md)
 - [llm-judge-must-be-measured-with-a-positive-control](lessons/llm-judge-must-be-measured-with-a-positive-control.md)
+- [running-tests-while-the-compose-app-is-up-locks-hsqldb](lessons/running-tests-while-the-compose-app-is-up-locks-hsqldb.md)
 - [security-starter-form-login-chain-breaks-interceptor-auth](lessons/security-starter-form-login-chain-breaks-interceptor-auth.md)
 
 ## Reports

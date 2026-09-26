@@ -942,3 +942,31 @@ Testado contra o modelo por omissão `granite4.1:3b` no compose:
   ligado contra um modelo que se prove discriminante. Gatilho para rever:
   modelo maior/local capaz (verificar sempre com um controlo positivo antes de
   ligar) ou classificador por embeddings — desenho novo, não Decoder-only.
+
+## 36. Guardrail determinista por embeddings (25/09/2026)
+
+Alternativa ao juiz LLM, que se provou inoperante com o modelo local
+(§35): comparação por cosseno contra exemplos etiquetados, com o
+`nomic-embed-text` que a app já usa (274 MB, zero RAM extra).
+
+- **Mecanismo**: `EmbeddingPolicyClassifier` embebe, à primeira utilização,
+  os exemplos de `guardrail/policy-examples.json` (3 políticas × 3 exemplos,
+  versionados e legíveis) e compara a resposta com o mais próximo. Uma
+  chamada de embedding, sem geração — determinístico e ~100 ms.
+- **Cadeia de estágios**: blocklist → embeddings → juiz LLM. Cada redigida
+  nomeia o estágio; o prefixo `[output-guardrail]` continua único.
+- **Calibrado, não chutado** (a lição de §35 aplicada): com o modelo real, os
+  controlos positivos pontuaram 0.70–0.98 e os negativos 0.49–0.67; o
+  threshold **0.75** fica acima da falha. `EmbeddingPolicyCalibrationIT` é a
+  prova executável — `E2E_GUARDRAIL=1 ./mvnw test -Dtest=EmbeddingPolicyCalibrationIT`.
+- **Margem estreita**: a separação real é pequena (≈0.03). Um caso benigno
+  perto do tema ("explica o que é um system prompt") chega a 0.67. Mais
+  exemplos e uma política por tema reduzem falsos positivos; não é um
+  guardrail de produção por si só.
+- **Fail-open** como os outros estágios: modelo de embeddings indisponível ⇒
+  resposta servida + `app.guardrails.embeddings.errors`.
+- **Bonsai descartado**: a máquina tem 7 GB de RAM e CPU-only; nenhuma
+  variante usável do Bonsai (F16 precisa 8–16 GB; o 27B 1-bit seria lento
+  demais) troca este custo, e o 1.7B/4B são da mesma classe do granite4.1:3b.
+- `./mvnw -B verify` **150/150** verdes (+8 testes), JaCoCo LINE ≥ 65% /
+  BRANCH ≥ 54% sem violações.
