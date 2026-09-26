@@ -5,7 +5,7 @@ summary: A BeanPostProcessor that wraps a bean changes its concrete type, so typ
 tags:
   - build
   - auth
-last_verified_commit: 009463f516ece13e3a879d48233496b3182a022e
+last_verified_commit: 1b69ba4b050093be7d1d87c3fe3ae5a919b82cc3
 status: active
 ---
 
