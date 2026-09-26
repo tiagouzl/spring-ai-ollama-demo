@@ -159,13 +159,15 @@ app:
       # examples in guardrail/policy-examples.json, using the app's existing
       # nomic-embed-text. One embedding call, no generation.
       #
-      # OFF by default. It catches narrative violations (0.73-0.98) with 0 false
-      # positives on two measured pools, but a raw destructive command scores
-      # 0.63 against the narrative examples and slips through. The stage measures
-      # example FORM, not just content, so it must not be trusted as a guard.
-      # EmbeddingPolicyCalibrationIT records that gap; see ANALISE.md.
-      enabled: false
-      threshold: 0.70
+      # ON by default. The examples cover BOTH forms a violation takes: atomic
+      # (commands, tokens) and narrative. Calibrated against the real model —
+      # violations 0.740-1.000, benign 0.474-0.686, threshold 0.71 sits in the
+      # gap. The atomic examples are what catch a raw destructive command; the
+      # near-miss controls in EmbeddingPolicyCalibrationIT guard the false
+      # positives. Re-verify after any change: E2E_GUARDRAIL=1 ./mvnw test
+      # -Dtest=EmbeddingPolicyCalibrationIT
+      enabled: true
+      threshold: 0.71
   chat-memory:
     # Rows in SPRING_AI_CHAT_MEMORY older than this are purged hourly (and at
     # startup). 168 = 7 days; <= 0 disables the purge.

@@ -451,7 +451,7 @@ app:
 | `app.rate-limit.store` | `memory` (default) or `redis` (shared quota via Lua, fail-open to memory; `prod` default) |
 | `app.prompt-guard.blocked-phrases` | Case-insensitive prompt-injection blocklist, rejected with 400 (default: classic jailbreak phrases) |
 | `app.prompt-guard.output-blocked-phrases` | Same blocklist applied to the model's answer before it reaches the client. A trip replaces the answer with a redacted text prefixed `[output-guardrail]` (200) and counts `app.security.outputguardrail.triggered`. Empty list disables (default: same phrases as the input blocklist) |
-| `app.guardrails.embeddings.enabled` | Deterministic output stage: cosine similarity against the labelled violation examples in [`src/main/resources/guardrail/policy-examples.json`](src/main/resources/guardrail/policy-examples.json) using `nomic-embed-text`. **Default `false`** — catches narrative violations (0.73–0.98) with 0 false positives on two measured pools, but a raw destructive command scores 0.63 against the narrative examples and slips through. It measures example form, not just content. Set `true` only if you have re-calibrated it for your use |
+| `app.guardrails.embeddings.enabled` | Deterministic output stage: cosine similarity against the labelled violation examples in [`src/main/resources/guardrail/policy-examples.json`](src/main/resources/guardrail/policy-examples.json) using `nomic-embed-text`. **Default `true`** — examples cover both atomic (commands, tokens) and narrative violation forms; calibrated at 0.71 with 0 false positives and verified end-to-end. Set `false` to turn it off |
 | `app.guardrails.embeddings.threshold` | Calibrated cosine cutoff for the embedding stage (default `0.70`; violations scored 0.73–0.98, benign 0.47–0.67). Re-verify with `E2E_GUARDRAIL=1 ./mvnw test -Dtest=EmbeddingPolicyCalibrationIT` after changing the model or the examples |
 | `app.guardrails.semantic.enabled` | Optional LLM-as-judge output stage, one extra model call per answer (default `false`; ~21 s with the 3B local model). Off by default because `granite4.1:3b` measures as a no-op — it answers `nao` to obvious violations. Fails open, counted on `app.guardrails.semantic.errors` |
 | `app.post-only-prompts` | `false` (default, demo keeps GET convenience) or `true` (prod): GET `/ai/**` carrying `message`/`question` answers 405 — prompts travel in POST bodies, never in URLs (logs/proxy/history). Prompt-free GETs (`/ai/session`, `/ai/alibaba/status`, `/ai/chat/memory`) and all POSTs are untouched |
@@ -472,11 +472,12 @@ caller fica coberto, sem tocar em controllers):
 
 1. **Blocklist** (`app.prompt-guard.output-blocked-phrases`) — determinístico,
    grátis. Apanha o que a lista conhece.
-2. **Embeddings** (`app.guardrails.embeddings.*`, **off por omissão**) —
+2. **Embeddings** (`app.guardrails.embeddings.*`, **activo por omissão**) —
    compara a resposta com exemplos etiquetados de cada política e redige acima
    de um limiar calibrado. Determinístico, uma chamada de embedding, sem
-   geração. *Desligado por omissão porque mede a forma do exemplo e deixa
-   passar um comando destrutivo cru — ver `ANALISE.md` §36.*
+   geração. Os exemplos cobrem **duas formas** de violação (atómica — comandos,
+   tokens — e narrativa), por isso também apanha um comando destrutivo cru; a
+   calibração e a verificação end-to-end estão em `ANALISE.md` §36.
 3. **Juíz LLM** (`app.guardrails.semantic.*`, opt-in) — pergunta ao modelo se a
    resposta viola as políticas. Lento e, com o modelo local por omissão,
    inoperante (medido: responde `nao` a violações óbvias) — por isso fica off.

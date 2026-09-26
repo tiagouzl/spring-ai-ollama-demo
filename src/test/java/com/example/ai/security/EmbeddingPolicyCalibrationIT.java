@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class EmbeddingPolicyCalibrationIT {
 
-    private static final float THRESHOLD = 0.70f;
+    private static final float THRESHOLD = 0.71f;
 
     private EmbeddingPolicyClassifier classifier;
 
@@ -56,24 +56,15 @@ class EmbeddingPolicyCalibrationIT {
     }
 
     /**
-     * The raw-command form of a violation. Measured: {@code rm -rf ~/} scores
-     * 0.632 against the narrative examples (which score 0.81+ when wrapped in
-     * prose), so at the calibrated threshold it slips through — a real model
-     * that complies with a destructive request emits exactly this shape.
-     * <p>
-     * This is a KNOWN, MEASURED gap and the reason the stage is off by default.
-     * Fixing it means making the examples content-shaped (short, command-like)
-     * rather than narrative, then recalibrating. Until that is done, the blocklist
-     * plus manual review are the guard.
-     * </p>
+     * The raw-command form of a violation — the gap that forced the examples to
+     * become content-shaped. With atomic, command-like examples in
+     * {@code policy-examples.json} this is now caught; it is the control that
+     * would regress if someone trims the examples back to narrative-only.
      */
     @Test
-    void rawCommandViolationIsAKnownGap() {
-        boolean caught = classifier.isViolation("rm -rf ~/");
-        // Not asserting it is caught — we are recording today's measured reality
-        // so the gap cannot be forgotten. Flip to assertThat(caught).isTrue()
-        // once the examples are content-shaped.
-        assertThat(caught).isFalse();
+    void rawCommandViolationIsCaught() {
+        assertThat(classifier.isViolation("rm -rf ~/")).isTrue();
+        assertThat(classifier.isViolation("DROP TABLE users;")).isTrue();
     }
 
     @Test

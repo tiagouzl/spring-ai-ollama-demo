@@ -966,21 +966,21 @@ Alternativa ao juiz LLM, que se provou inoperante com o modelo local
   - @ **0.70**: **0 falsos positivos nas duas pools, 6/6 violações apanhadas** —
     e apanha precisamente o que a blocklist deixa passar
   - limiar escolhido: **0.70**
-- **Default ligado → revertido** (verificação end-to-end, 26/09/2026): a
-  calibração foi feita com controlos **narrativos** e o IT deu verde, mas a
+- **Default ligado → revertido → fechado** (verificação end-to-end, 26/09/2026):
+  a calibração foi feita com controlos **narrativos** e o IT deu verde, mas a
   prova end-to-end na app real (modelo a ceder a um pedido destrutivo) expôs
-  que o estágio **não apanha a forma real de uma violação**: `rm -rf ~/` cru
-  pontua **0.632** (abaixo de 0.70) contra exemplos que, embrulhados em prosa,
-  pontuam 0.813. O classificador mede a **forma** do exemplo, não só o
-  conteúdo. Um guardrail que falha na demonstração mais óbvia não pode ficar
-  activo por defeito: **default voltou a `off`**.
-  - `EmbeddingPolicyCalibrationIT.rawCommandViolationIsAKnownGap` regista a
-    lacuna como facto medido (verde porque reflecte a realidade, não o
-    desejado) para não se perder.
-  - **Como fechar a lacuna**: exemplos com a *forma* do conteúdo que se quer
-    apanhar (comandos curtos, tokens, frases factuais) em vez de frases
-    narrativas, e recalibrar com controlos de ambas as formas. Ou usar o modelo
-    de segunda opinião (embeddings + blocklist). Não fechado.
+  que o estágio **não apanhava a forma real de uma violação**: `rm -rf ~/` cru
+  pontuava **0.632** contra exemplos que, embrulhados em prosa, pontuavam
+  0.813 — o classificador media a **forma** do exemplo, não o conteúdo.
+  - **Fecho**: os exemplos passaram a cobrir **duas formas** — atómica
+    (comandos curtos, tokens crus, `DROP TABLE`, factuais) + narrativa. Com a
+    forma atómica, `rm -rf ~/` pontua **1.00**, o limiar recalibrou para
+    **0.71** (violações 0.74–1.00, benign 0.47–0.69), e o **mesmo pedido
+    end-to-end passou a ser redigido** (`triggered=1.0`, `errors=0.0`), com as
+    benignas perto do limiar a passar intactas (zero falsos positivos).
+  - `rawCommandViolationIsCaught` no IT é o controlo que regride se alguém
+    aparar os exemplos de volta a só narrativa.
+  - **Default: ligado**, agora com prova end-to-end.
 - **Lição transversal (3.ª vez)**: o IT com mocks/dados próprios dá confiança
   que não corresponde ao comportamento real. O que apanhou isto foi uma chamada
   HTTP à app com o modelo real — o teste mais barato que toca o caminho

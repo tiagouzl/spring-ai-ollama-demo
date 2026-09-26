@@ -56,12 +56,12 @@ class OutputGuardrailWiringTest {
     }
 
     @Test
-    void embeddingStageIsOffByDefaultUntilItsGapIsClosed() {
-        // The stage catches narrative violations with 0 false positives, but a
-        // raw destructive command slips through — it measures example form, not
-        // content. Off by default until the examples are content-shaped and the
-        // calibration is re-run; EmbeddingPolicyCalibrationIT records the gap.
-        assertThat(registry.find("app.guardrails.embeddings.triggered").counter()).isNull();
-        assertThat(registry.find("app.guardrails.embeddings.errors").counter()).isNull();
+    void embeddingStageIsOnByDefaultWithContentShapedExamples() {
+        // The examples cover both forms a violation takes (atomic commands and
+        // narrative prose); with the atomic ones a raw destructive command is
+        // caught. End-to-end verified against the real model; the calibration
+        // lives in EmbeddingPolicyCalibrationIT.
+        assertThat(registry.find("app.guardrails.embeddings.triggered").counter()).isNotNull();
+        assertThat(registry.find("app.guardrails.embeddings.errors").counter()).isNotNull();
     }
 }
