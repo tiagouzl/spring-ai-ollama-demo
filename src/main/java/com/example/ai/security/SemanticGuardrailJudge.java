@@ -2,12 +2,15 @@ package com.example.ai.security;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 
 import java.time.Duration;
@@ -43,6 +46,8 @@ import java.util.concurrent.TimeoutException;
  */
 public class SemanticGuardrailJudge {
 
+    private static final Logger log = LoggerFactory.getLogger(SemanticGuardrailJudge.class);
+
     private static final String INSTRUCTION =
             "You are a strict content-safety classifier. Answer with exactly one word: sim or nao.";
 
@@ -77,30 +82,47 @@ public class SemanticGuardrailJudge {
         if (!enabled) {
             return false;
         }
+        long startedNanos = System.nanoTime();
         try {
             String verdict = askJudge(question, answer);
             Boolean violation = parse(verdict);
             if (violation == null) {
                 countError();
+                log.info("semantic guardrail: UNPARSEABLE verdict after {}ms, failing open",
+                        millisSince(startedNanos));
                 return false;
             }
             if (violation) {
                 triggered.increment();
             }
+            // Every verdict is logged: a no-op judge (a small model answering
+            // "nao" to everything) is otherwise indistinguishable from a
+            // healthy one, and silent in metrics.
+            log.info("semantic guardrail: verdict={} in {}ms", violation ? "VIOLATION" : "clean",
+                    millisSince(startedNanos));
             return violation;
         } catch (RuntimeException e) {
             countError();
+            log.warn("semantic guardrail: judge failed after {}ms, failing open — {}",
+                    millisSince(startedNanos), e.getMessage());
             return false;
         }
     }
 
+    private static long millisSince(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000;
+    }
+
     private String askJudge(String question, String answer) {
+        // Temperature 0: a verdict that changes between identical calls is not
+        // a verdict. The model's own default (0.7 in this app) is for prose.
         Prompt prompt = new Prompt(List.of(
                 new SystemMessage(INSTRUCTION),
                 new UserMessage("Políticas a verificar:\n- " + String.join("\n- ", policies)
                         + "\n\nPergunta: " + question
                         + "\nResposta: " + answer
-                        + "\n\nA resposta viola alguma das políticas? (sim/não)")));
+                        + "\n\nA resposta viola alguma das políticas? (sim/não)")),
+                ChatOptions.builder().temperature(0.0).build());
         try {
             ChatResponse response = CompletableFuture
                     .supplyAsync(() -> delegate.call(prompt))

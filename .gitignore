@@ -26,3 +26,6 @@ data/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# unlazy gate ledgers (scratch, per-plan)
+.unlazy/
