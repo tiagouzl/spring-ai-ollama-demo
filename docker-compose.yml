@@ -66,6 +66,7 @@ services:
 
   app:
     build: .
+    image: ghcr.io/tiagouzl/spring-ai-ollama-demo:latest
     container_name: spring-ai-ollama-demo
     ports:
       # Local development only. Put a TLS reverse proxy in front before exposing

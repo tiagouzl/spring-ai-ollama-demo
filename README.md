@@ -269,6 +269,12 @@ real stack: `E2E_KEYCLOAK=1 ./mvnw -B verify -Dtest=KeycloakE2EIT -Dsurefire.fai
 docker compose up --build
 ```
 
+Or run the prebuilt image (no local build):
+
+```bash
+docker compose pull app && docker compose up
+```
+
 Brings up **Ollama** (with `granite4.1:3b` + `nomic-embed-text` pulled automatically on first run) and the **app** on `http://localhost:8080`. The app's `./data` (HSQLDB chat memory + persisted vector store) is mounted from the host, so conversations and embeddings survive restarts. Optional: `APP_API_KEY=secret docker compose up --build` to enable the `X-API-Key` guard. Build only the app image: `docker build -t spring-ai-ollama-demo .`
 
 The runtime image runs as non-root (`appuser`, uid 1000 — keep `./data` writable by it) with a `HEALTHCHECK` on `/actuator/health`, and compose tracks it for the `app` service.
