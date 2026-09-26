@@ -4,14 +4,15 @@
 - Result: updated
 - Source spec: none (bounded change, design approved in chat)
 - Source context: `lessons/llm-judge-must-be-measured-with-a-positive-control.md` (the rule this stage exists to satisfy)
-- Formal commits: `a72bccb`
+- Formal commits: `a72bccb` (stage), plus the default-on commit (threshold 0.70, README section)
 - Created docs: 1 (lesson)
 - Updated docs: 4 (index, security card, ANALISE §36, relatorio.md)
 - Deferred docs: 0
+- README: new "Guardrails de output" section (the three stages, the redaction contract, the fail-open posture, the tuning surface, the honest limits) + five new rows in the configuration table.
 
 ## Durable updates made
 - Module cards:
-  - `security.md` — new invariant for the embedding stage: config, the calibrated threshold with its measured ranges, the opt-in gate, fail-open, the stage order (blocklist → embeddings → judge), and the runnable re-check command.
+  - `security.md` — new invariant for the embedding stage: config, the calibrated threshold with its measured ranges, **on by default** (with the two-pool evidence and the complementarity of the stages), fail-open, the stage order (blocklist → embeddings → judge), and the runnable re-check command.
 - Contracts: `app.guardrails.embeddings.{enabled,threshold}` + `guardrail/policy-examples.json` (the tuning surface: edit examples, not code).
 - Decisions: default off; examples-over-policy-text; blocklist before embeddings before judge — all in `ANALISE.md` §36, including why Bonsai was dropped (7 GB RAM, CPU-only) and the measured separation.
 - Runbooks: the calibration command is documented in the IT javadoc and ANALISE §36.
