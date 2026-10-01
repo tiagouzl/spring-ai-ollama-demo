@@ -30,12 +30,14 @@
 ## 4. OpenCode `permission` — listas explícitas (13 deny + 9 ask)
 
 Deny (acidente irreversível, sem uso legítimo interativo):
-`rm -rf /`, `rm -fr /`, `rm -rf /*`, `rm -rf ~`, `rm -rf ~/*`, `sudo rm *`, `mkfs *`, `chmod -R 777 *`, `*| sh`, `*| bash`, `*| sudo sh`, `*| sudo bash`, `find / -delete`
+`rm -rf /`, `rm -fr /`, `rm -rf /*`, `rm -rf ~`, `rm -rf ~/*`, `sudo rm *`, `mkfs *`, `chmod -R 777 *`, `sh`, `bash`, `sudo sh`, `sudo bash`, `find / -delete`
 
 Ask (uso legítimo existe → escape hatch `once`/`always`/`reject`):
 `git push *--force*`, `git push *-f*`, `git push * +*`, `git reset --hard*`, `dd *`, `*DROP TABLE*`, `*DROP DATABASE*`, `*drop table*`, `*drop database*` (caixa dupla porque o match é literal)
 
 Semântica de glob a fixar no dry-run (doc não diz prefixo vs string inteira): `rm -rf /tmp/x` e `rm -rf ./build` DEVEM passar; se o padrão `rm -rf /` casar por prefixo, estreitar para `rm -rf / ` com sentinela ou reordenar (última regra vence).
+
+Nota dry-run: globs '*| …' não cruzam fronteira de pipe no matcher do OpenCode (segment match); formas por segmento validadas 22/22+8/8.
 
 ## 5. Hermes espelho
 
